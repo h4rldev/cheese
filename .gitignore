@@ -1,0 +1,8 @@
+.direnv
+.cache
+lib
+out
+bin
+*.spv
+output.txt
+compile_commands.json
