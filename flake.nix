@@ -1,5 +1,5 @@
 {
-  description = "The dev flake for butter, a vulkan renderer.";
+  description = "The dev flake for cheese, an immediate mode gui library.";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
