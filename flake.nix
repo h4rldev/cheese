@@ -21,7 +21,7 @@
       pkgs = import nixpkgs {inherit system;};
     in {
       devShells.default = pkgs.mkShell {
-        name = "butter-dev";
+        name = "cheese-dev";
 
         packages = with pkgs; [
           clang-tools
