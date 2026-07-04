@@ -4,6 +4,9 @@
 #include <cheese/types.h>
 
 cheese_t cheese_default(void);
+
+void cheese_set_cursor_callback(cheese_t *cheese, cheese_cursor_callback_t cb,
+                                void *userdata);
 void cheese_begin(cheese_t *cheese, cheese_renderer_t *renderer, f32 mouse_x,
                   f32 mouse_y, u32 mouse_buttons, f32 scroll_x, f32 scroll_y,
                   u32 key_mods, f32 delta_time);

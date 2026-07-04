@@ -55,6 +55,7 @@
           vulkan-loader
           libxcb-wm
           libxcb
+          libxcb-cursor
           libxkbcommon
           wayland
           harfbuzz

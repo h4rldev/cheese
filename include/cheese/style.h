@@ -9,6 +9,14 @@ cheese_style_t *cheese_current_style(cheese_t *cheese);
 void cheese_push_style(cheese_t *cheese, cheese_style_t style);
 void cheese_pop_style(cheese_t *cheese);
 
+void cheese_style_set_font_size(cheese_style_t *style, u32 font_size);
+void cheese_style_set_layout_horizontal(cheese_style_t *style, b32 horizontal);
+void cheese_style_set_layout_spacing(cheese_style_t *style, f32 spacing);
+void cheese_style_set_align_x(cheese_style_t *style,
+                              cheese_alignment_t align_x);
+void cheese_style_set_align_y(cheese_style_t *style,
+                              cheese_alignment_t align_y);
+
 void cheese_style_set_padding_uniform(cheese_style_t *style, f32 padding);
 void cheese_style_set_padding(cheese_style_t *style, f32 padding_left,
                               f32 padding_down, f32 padding_up,

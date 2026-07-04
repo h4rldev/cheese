@@ -47,7 +47,7 @@ u32 cheese_button_ex(cheese_t *cheese, f32 x, f32 y, f32 w, f32 h,
 
   if (cheese->cursor_callback)
     cheese->cursor_callback(cheese->cursor_callback_userdata,
-                            hovered ? CHEESE_CURSOR_HAND
+                            hovered ? CHEESE_CURSOR_POINTER
                                     : CHEESE_CURSOR_DEFAULT);
 
   u32 result = 0;
@@ -77,8 +77,11 @@ u32 cheese_button_ex(cheese_t *cheese, f32 x, f32 y, f32 w, f32 h,
   }
 
   if (label && label->len > 0 && font) {
+    u32 target_size = style->font_size ? style->font_size : font->default_size;
+    cheese_font_set_size(font, target_size);
+
     f32 text_w = cheese_font_measure_text(font, label);
-    f32 text_h = font->line_height;
+    f32 text_h = font->active_variant->line_height;
     f32 center_x = x + (w - text_w) / 2.0f;
     f32 center_y = y + (h - text_h) / 2.0f + (text_h * 0.75f);
 
@@ -101,16 +104,26 @@ b32 cheese_button(cheese_t *cheese, f32 x, f32 y, f32 w, f32 h,
 b32 cheese_button_auto(cheese_t *cheese, const string *label,
                        cheese_font_t *font) {
   cheese_layout_t *layout = cheese_current_layout(cheese);
-  // cheese_style_t *style = cheese_current_style(cheese);
+  cheese_style_t *style = cheese_current_style(cheese);
 
-  // TODO: Add sizing based on style.
-  f32 w = 80.0f;
-  f32 h = 30.0f;
+  u32 target_size = style->font_size ? style->font_size : font->default_size;
+
+  cheese_font_set_size(font, target_size);
+
+  f32 text_w = cheese_font_measure_text(font, label);
+  f32 text_h = font->active_variant->line_height;
+
+  f32 pad_w =
+      cheese_style_get_pad_left(style) + cheese_style_get_pad_right(style);
+  f32 pad_h = cheese_style_get_pad_up(style) + cheese_style_get_pad_down(style);
+
+  f32 bw = text_w + (pad_w > 0.0f ? pad_w : 20.0f);
+  f32 bh = text_h + (pad_h > 0.0f ? pad_h : 10.0f);
 
   f32 x = layout->x;
   f32 y = layout->y;
 
-  b32 result = cheese_button(cheese, x, y, w, h, label, font, 0, 0, 0);
-  cheese_advance_cursor(cheese, w, h);
+  b32 result = cheese_button(cheese, x, y, bw, bh, label, font, 0, 0, 0);
+  cheese_advance_cursor(cheese, bw, bh);
   return result;
 }

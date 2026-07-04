@@ -98,6 +98,24 @@ static void event_callback(bread_event_t *event, void *userdata) {
   }
 }
 
+static void cursor_callback(void *userdata, cheese_cursor_t cursor) {
+  app_state_t *state = (app_state_t *)userdata;
+  bread_window_t *window = state->window;
+
+  cheese_log_debug("Cursor callback: %d", cursor);
+
+  switch (cursor) {
+  case CHEESE_CURSOR_DEFAULT:
+    bread_set_cursor(window, BREAD_CURSOR_DEFAULT);
+    break;
+  case CHEESE_CURSOR_POINTER:
+    bread_set_cursor(window, BREAD_CURSOR_POINTER);
+    break;
+  default:
+    break;
+  }
+}
+
 static void render_callback(vk_command_buffer_t cmd,
                             const butter_frame_t *frame, void *userdata) {
   app_state_t *state = (app_state_t *)userdata;
@@ -118,15 +136,17 @@ static void render_callback(vk_command_buffer_t cmd,
   container_style.text_color = cheese_color_rgba(255, 255, 255, 255);
   container_style.border_width = 1.0f;
   container_style.uniform_padding = true;
-  // container_style.padding.uniform = 10.0f;
+  container_style.padding.uniform = 30.0f;
   cheese_push_style(&state->cheese, container_style);
 
-  cheese_begin_container_auto(&state->cheese, 400, 200);
+  cheese_begin_container_auto(&state->cheese, 600, 500);
   {
     string *label = string_from_cstr(state->arena, "Meow!");
     if (cheese_button_auto(&state->cheese, label, state->font)) {
       cheese_log_info("Meow :3");
     }
+
+    cheese_style_set_font_size(&container_style, 40);
 
     string *label2 = string_from_cstr(state->arena, "Woof!");
     if (cheese_button_auto(&state->cheese, label2, state->font)) {
@@ -134,6 +154,10 @@ static void render_callback(vk_command_buffer_t cmd,
     }
   }
   cheese_end_container(&state->cheese);
+
+  cheese_draw_texture(&state->cheese, 700, 500, 1024, 1024,
+                      state->font->active_variant->atlas_texture_id,
+                      cheese_color_rgba(0, 0, 0, 255));
 
   cheese_pop_style(&state->cheese);
   cheese_end(&state->cheese);
@@ -174,6 +198,8 @@ int main(void) {
   butter_set_vsync(butter, true);
   butter_init_texture_upload(butter, 16);
 
+  bread_cursor_init(&window);
+
   cheese_renderer_t renderer =
       cheese_create_butter_renderer(butter, perm_arena);
   if (!renderer.draw_rect || !renderer.draw_texture || !renderer.draw_line ||
@@ -194,7 +220,7 @@ int main(void) {
   }
 
   const cstr *font_path =
-      "/run/current-system/sw/share/X11/fonts/DejaVuSans.ttf";
+      "/run/current-system/sw/share/X11/fonts/MapleMono-Regular.ttf";
   if (access(font_path, R_OK) != 0) {
     cheese_log_error("Failed to access font path '%s'", font_path);
     butter_end(butter);
@@ -212,7 +238,10 @@ int main(void) {
     cheese_log_error("Failed to load font with the path '%s'", font_path);
   }
 
+  cheese_t cheese = cheese_default();
+
   app_state_t state = {0};
+  state.cheese = cheese;
   state.window = &window;
   state.butter = butter;
   state.renderer = renderer;
@@ -226,6 +255,7 @@ int main(void) {
   state.key_mods = 0;
   state.delta_time = 0;
 
+  cheese_set_cursor_callback(&state.cheese, cursor_callback, &state);
   butter_set_draw_callback(butter, render_callback, &state);
   bread_window_set_event_callback(&window, event_callback, &state);
   bread_window_set_min_size(&window, 400, 300);
@@ -240,6 +270,7 @@ int main(void) {
     arena_clear(frame_arena);
   }
 
+  bread_cursor_cleanup(&window);
   butter_stop_render_thread(butter);
   butter_stop_texture_uploads(butter);
 

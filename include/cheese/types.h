@@ -77,31 +77,46 @@ struct cheese_renderer {
   void (*delete_texture)(void *userdata, u32 texture_id);
 };
 
-struct cheese_font {
+typedef enum {
+  CHEESE_ALIGN_START,
+  CHEESE_ALIGN_CENTER,
+  CHEESE_ALIGN_END,
+  CHEESE_ALIGN_FILL,
+  CHEESE_ALIGN_MAX,
+} cheese_alignment_t;
+
+typedef enum {
+  CHEESE_SIZE_FIT,
+  CHEESE_SIZE_FILL,
+  CHEESE_SIZE_FIXED,
+  CHEESE_SIZE_MAX,
+} cheese_size_mode_t;
+
+typedef struct {
+  u32 font_size;
+  cheese_glyph_entry_t **glyphs; // Dynamic array.
+  hb_font_t *hb_font;            // Font at this scale
+  b32 atlas_dirty;
   u32 atlas_texture_id;
   u32 atlas_width, atlas_height;
+  i32 ascender, descender, line_height;
+} cheese_font_size_variant_t;
 
-  cheese_glyph_entry_t **glyphs; // Dynamic array.
-
-  hb_font_t *hb_font;
+struct cheese_font {
   ft_face_t ft_face;
-
-  u32 font_size;
-  i32 ascender;
-  i32 descender;
-  i32 line_height;
-
-  u32 notdef_glyph_id;
-
   arena_t *arena;
   cheese_renderer_t *renderer;
-  b32 atlas_dirty;
-  b32 atlas_baking;
+
+  u32 notdef_glyph_id;
+  u32 default_size;
+
+  cheese_font_size_variant_t **variants;
+  cheese_font_size_variant_t *active_variant;
 };
 
 typedef enum {
   CHEESE_CURSOR_DEFAULT = 0,
-  CHEESE_CURSOR_POINTER = 0,
+  CHEESE_CURSOR_POINTER,
   CHEESE_CURSOR_HAND,
   CHEESE_CURSOR_TEXT,
   CHEESE_CURSOR_MOVE,
@@ -142,6 +157,10 @@ typedef struct {
   f32 width;
   b32 horizontal;
   f32 spacing;
+  cheese_alignment_t align_x;
+  cheese_alignment_t align_y;
+  f32 container_w;
+  f32 container_h;
 } cheese_layout_t;
 
 typedef struct {
@@ -174,6 +193,12 @@ typedef struct {
       f32 margin_right;
     } directions;
   } margin;
+
+  u32 font_size;
+  b32 layout_horizontal;
+  f32 layout_spacing;
+  cheese_alignment_t align_x;
+  cheese_alignment_t align_y;
 } cheese_style_t;
 
 #ifndef CHEESE_STACK_MAX_DEPTH

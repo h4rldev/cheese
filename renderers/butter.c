@@ -380,20 +380,19 @@ static void butter_draw_text(void *userdata, f32 x, f32 y, const string *text,
                              cheese_font_t *font, cheese_color_t color,
                              f32 scale) {
   butter_renderer_t *renderer = (butter_renderer_t *)userdata;
-  if (!font || !text || text->len == 0) {
+  if (!font || !font->active_variant || !text || text->len == 0) {
     cheese_log_error("Invalid text or font");
     return;
   }
 
-  if (font->atlas_dirty) {
-    cheese_log_debug("Font atlas dirty, rebuilding");
+  if (!font->active_variant->atlas_texture_id) {
     cheese_font_rebuild_atlas(font);
   }
 
   hb_buffer_t *hb_buffer = hb_buffer_create();
   hb_buffer_add_utf8(hb_buffer, (cstr *)text->base, text->len, 0, -1);
   hb_buffer_guess_segment_properties(hb_buffer);
-  hb_shape(font->hb_font, hb_buffer, NULL, 0);
+  hb_shape(font->active_variant->hb_font, hb_buffer, NULL, 0);
 
   u32 glyph_count;
   hb_glyph_info_t *glyph_info =
@@ -419,6 +418,13 @@ static void butter_draw_text(void *userdata, f32 x, f32 y, const string *text,
       continue;
     }
 
+    /*if (glyph_id == FT_Get_Char_Index(font->ft_face, 'M')) {
+      cheese_log_debug(
+          "M %d: bearing_x=%f, width=%f, u0=%f, v0=%f, u1=%f, v1=%f", glyph_id,
+          glyph->bearing_x, glyph->width, glyph->u0, glyph->v0, glyph->u1,
+          glyph->v1);
+    }*/
+
     f32 w = glyph->width * scale;
     f32 h = glyph->height * scale;
     f32 off_x = (glyph->bearing_x + x_offset) * scale;
@@ -426,7 +432,7 @@ static void butter_draw_text(void *userdata, f32 x, f32 y, const string *text,
 
     butter_draw_quad_textured(renderer, cursor_x + off_x, cursor_y - off_y, w,
                               h, glyph->u0, glyph->v0, glyph->u1, glyph->v1,
-                              font->atlas_texture_id, color);
+                              font->active_variant->atlas_texture_id, color);
 
     cursor_x += x_advance * scale;
     cursor_y += y_advance * scale;

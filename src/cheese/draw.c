@@ -1,5 +1,6 @@
 #include <cheese/draw.h>
 #include <cheese/log.h>
+#include <cheese/style.h>
 #include <cheese/types.h>
 
 void cheese_draw_rect(cheese_t *cheese, f32 x, f32 y, f32 w, f32 h,
@@ -58,9 +59,12 @@ void cheese_draw_text(cheese_t *cheese, f32 x, f32 y, const string *text,
     return;
   }
 
-  /*cheese_log_debug(
-      "Drawing text with %fx%f dimensions, text %.*s, color %u, and scale %f",
-      x, y, text->len, text->base, color, scale);*/
+  cheese_style_t *style = cheese_current_style(cheese);
+  if (style && font) {
+    u32 target_size = style->font_size ? style->font_size : font->default_size;
+    cheese_font_set_size(font, target_size);
+  }
+
   cheese->renderer->draw_text(cheese->renderer->userdata, x, y, text, font,
                               color, scale);
 }

@@ -12,6 +12,13 @@ cheese_style_t cheese_default_style(void) {
       .corner_radius = 0.0f,
       .uniform_padding = true,
       .padding.uniform = 0.0f,
+      .uniform_margin = true,
+      .margin.uniform = 0.0f,
+      .font_size = 0,
+      .layout_horizontal = true,
+      .layout_spacing = 4.0f,
+      .align_x = CHEESE_ALIGN_START,
+      .align_y = CHEESE_ALIGN_START,
   };
 }
 
@@ -33,6 +40,56 @@ void cheese_push_style(cheese_t *cheese, cheese_style_t style) {
 void cheese_pop_style(cheese_t *cheese) {
   if (cheese->style_stack_depth > 0)
     cheese->style_stack_depth--;
+}
+
+void cheese_style_set_font_size(cheese_style_t *style, u32 font_size) {
+  if (!style) {
+    cheese_log_error("Invalid style");
+    return;
+  }
+  style->font_size = font_size;
+}
+
+void cheese_style_set_layout_horizontal(cheese_style_t *style, b32 horizontal) {
+  if (!style) {
+    cheese_log_error("Invalid style");
+    return;
+  }
+  style->layout_horizontal = horizontal;
+}
+
+void cheese_style_set_layout_spacing(cheese_style_t *style, f32 spacing) {
+  if (!style) {
+    cheese_log_error("Invalid style");
+    return;
+  }
+
+  if (spacing < 0.0f) {
+    cheese_log_error("Invalid spacing value, must be >= 0");
+    return;
+  }
+
+  style->layout_spacing = spacing;
+}
+
+void cheese_style_set_align_x(cheese_style_t *style,
+                              cheese_alignment_t align_x) {
+  if (!style) {
+    cheese_log_error("Invalid style");
+    return;
+  }
+
+  style->align_x = align_x;
+}
+
+void cheese_style_set_align_y(cheese_style_t *style,
+                              cheese_alignment_t align_y) {
+  if (!style) {
+    cheese_log_error("Invalid style");
+    return;
+  }
+
+  style->align_y = align_y;
 }
 
 void cheese_style_set_padding_uniform(cheese_style_t *style, f32 padding) {

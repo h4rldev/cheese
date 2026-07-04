@@ -27,15 +27,23 @@ void cheese_begin_container(cheese_t *cheese, f32 x, f32 y, f32 w, f32 h) {
                      border_color);
   }
 
-  cheese_push_clip(cheese, x + pad_left, y + pad_up, w - pad_left - pad_right,
-                   h - pad_up - pad_down);
+  f32 clip_x = x + pad_left - 1.0f;
+  f32 clip_y = y + pad_up - 1.0f;
+  f32 clip_w = w - pad_left - pad_right + 2.0f;
+  f32 clip_h = h - pad_up - pad_down + 2.0f;
+
+  cheese_push_clip(cheese, clip_x, clip_y, clip_w, clip_h);
 
   cheese_layout_t layout = {0};
   layout.x = x + pad_left;
   layout.y = y + pad_up;
   layout.width = w - pad_left - pad_right;
-  layout.horizontal = true;
-  layout.spacing = 4.0f;
+  layout.horizontal = style->layout_horizontal;
+  layout.spacing = style->layout_spacing;
+  layout.align_x = style->align_x;
+  layout.align_y = style->align_y;
+  layout.container_w = w;
+  layout.container_h = h;
 
   cheese_push_layout(cheese, layout);
 }
