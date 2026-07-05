@@ -466,11 +466,15 @@ cheese_glyph_t *cheese_font_get_glyph(cheese_font_t *font, u32 glyph_id) {
     return null;
 
   cheese_glyph_entry_t *entry = cheese_variant_find_entry(var, glyph_id);
-  if (entry)
+  if (entry) {
     return &entry->glyph;
+  }
 
   if (cheese_variant_load_and_cache_glyph(var, font->ft_face, font->arena,
                                           glyph_id, false)) {
+    if (glyph_id == 3)
+      cheese_log_debug("Loaded glyph for codepoint %u, rebuilding atlas",
+                       glyph_id);
     entry = cheese_variant_find_entry(var, glyph_id);
     if (entry)
       return &entry->glyph;

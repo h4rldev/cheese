@@ -7,11 +7,11 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1783115288,
-        "narHash": "sha256-LotVxXO6NBRagvjbe7K410KQmNze2wMiAvWjL9sqG5U=",
+        "lastModified": 1783218083,
+        "narHash": "sha256-gQ9BbMN1uadcBzW+/1U1jDIN/7sMOhpoZvEWQ8q/LGk=",
         "ref": "refs/heads/main",
-        "rev": "08b3ae15bc1ad802a22785d7c307e5e856577067",
-        "revCount": 29,
+        "rev": "6d7d9aaaab2baa6d37ccced6a7d9993ba6eaec82",
+        "revCount": 30,
         "type": "git",
         "url": "https://codeberg.org/h4rl/bread"
       },
@@ -395,11 +395,11 @@
     },
     "nixpkgs_8": {
       "locked": {
-        "lastModified": 1782723713,
-        "narHash": "sha256-oPXCU/SSUokcGaJREHibG1CBX3+s/W7orDWQOZDsEeQ=",
+        "lastModified": 1782959384,
+        "narHash": "sha256-xnJJk+ct+D2+wdRxj1wk36w5zV9RVESwRqcklPdt3fM=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "b5aa0fbd538984f6e3d201be0005b4463d8b09f8",
+        "rev": "65179426c83bb3f6bc14898b42ea1c6f01d374b0",
         "type": "github"
       },
       "original": {

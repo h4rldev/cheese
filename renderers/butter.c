@@ -185,9 +185,8 @@ static void butter_draw_line(void *userdata, f32 x1, f32 y1, f32 x2, f32 y2,
     if (renderer->clip_stack_depth > 0) {
       cmd.scissor = renderer->clip_stack[renderer->clip_stack_depth - 1];
       cmd.scissor_enabled = true;
-    } else {
+    } else
       cmd.scissor_enabled = false;
-    }
 
     butter_submit_draws(butter, &cmd, 1);
     return;
@@ -197,7 +196,7 @@ static void butter_draw_line(void *userdata, f32 x1, f32 y1, f32 x2, f32 y2,
   f32 dy = y2 - y1;
   f32 len = sqrtf(dx * dx + dy * dy);
   if (len < 0.0001f) {
-    cheese_log_error("Invalid arc parameters");
+    cheese_log_error("Invalid line parameters");
     return;
   }
 
@@ -218,6 +217,12 @@ static void butter_draw_line(void *userdata, f32 x1, f32 y1, f32 x2, f32 y2,
   px[3] = x2 + nx * half_thickness;
   py[3] = y2 + ny * half_thickness;
 
+  f32 nx0, ny0, nx1, ny1, nx2, ny2, nx3, ny3;
+  point_to_ndc(butter, px[0], py[0], &nx0, &ny0);
+  point_to_ndc(butter, px[1], py[1], &nx1, &ny1);
+  point_to_ndc(butter, px[2], py[2], &nx2, &ny2);
+  point_to_ndc(butter, px[3], py[3], &nx3, &ny3);
+
   butter_allocation_t alloc =
       butter_alloc_vertices(butter, 4, sizeof(vertex_t));
   if (!alloc.mapped) {
@@ -227,10 +232,10 @@ static void butter_draw_line(void *userdata, f32 x1, f32 y1, f32 x2, f32 y2,
   }
 
   vertex_t *vertices = alloc.mapped;
-  vertices[0] = (vertex_t){px[0], py[0], 0, 0, r, g, b, a};
-  vertices[1] = (vertex_t){px[1], py[1], 0, 0, r, g, b, a};
-  vertices[2] = (vertex_t){px[2], py[2], 0, 0, r, g, b, a};
-  vertices[3] = (vertex_t){px[3], py[3], 0, 0, r, g, b, a};
+  vertices[0] = (vertex_t){nx0, ny0, 0, 0, r, g, b, a};
+  vertices[1] = (vertex_t){nx1, ny1, 0, 0, r, g, b, a};
+  vertices[2] = (vertex_t){nx2, ny2, 0, 0, r, g, b, a};
+  vertices[3] = (vertex_t){nx3, ny3, 0, 0, r, g, b, a};
 
   butter_draw_cmd_t cmd = {0};
   cmd.pipeline = renderer->solid_pipeline;
@@ -291,8 +296,13 @@ static void butter_draw_arc(void *userdata, f32 cx, f32 cy, f32 radius,
     vertex_t *vertices = alloc.mapped;
     for (u32 i = 0; i <= vcount; i++) {
       f32 t = start_angle + (f32)i / (f32)segments * angle_range;
-      vertices[i] = (vertex_t){
-          cx + radius * cosf(t), cy + radius * sinf(t), 0, 0, r, g, b, a};
+      f32 px = cx + radius * cosf(t);
+      f32 py = cy + radius * sinf(t);
+
+      f32 nx, ny;
+      point_to_ndc(butter, px, py, &nx, &ny);
+
+      vertices[i] = (vertex_t){nx, ny, 0, 0, r, g, b, a};
     }
 
     butter_draw_cmd_t cmd = {0};
@@ -318,11 +328,19 @@ static void butter_draw_arc(void *userdata, f32 cx, f32 cy, f32 radius,
     }
 
     vertex_t *vertices = v_alloc.mapped;
-    vertices[0] = (vertex_t){cx, cy, 0, 0, r, g, b, a};
+
+    f32 nx0, ny0;
+    point_to_ndc(butter, cx, cy, &nx0, &ny0);
+    vertices[0] = (vertex_t){nx0, ny0, 0, 0, r, g, b, a};
     for (u32 i = 0; i <= segments; i++) {
       f32 t = start_angle + (f32)i / (f32)segments * angle_range;
-      vertices[i + 1] = (vertex_t){
-          cx + radius * cosf(t), cy + radius * sinf(t), 0, 0, r, g, b, a};
+      f32 px = cx + radius * cosf(t);
+      f32 py = cy + radius * sinf(t);
+
+      f32 nx, ny;
+      point_to_ndc(butter, px, py, &nx, &ny);
+
+      vertices[i + 1] = (vertex_t){nx, ny, 0, 0, r, g, b, a};
     }
 
     butter_draw_cmd_t cmd = {0};
@@ -357,11 +375,17 @@ static void butter_draw_arc(void *userdata, f32 cx, f32 cy, f32 radius,
     f32 cos_t = cosf(t);
     f32 sin_t = sinf(t);
 
-    vertices[i * 2] =
-        (vertex_t){cx + radius * cos_t, cy + radius * sin_t, 0, 0, r, g, b, a};
+    f32 nx0, ny0, nx1, ny1;
+    f32 px0 = cx + radius * cos_t;
+    f32 py0 = cy + radius * sin_t;
+    f32 px1 = cx + inner_radius * cos_t;
+    f32 py1 = cy + inner_radius * sin_t;
 
-    vertices[i * 2 + 1] = (vertex_t){
-        cx + inner_radius * cos_t, cy + inner_radius * sin_t, 0, 0, r, g, b, a};
+    point_to_ndc(butter, px0, py0, &nx0, &ny0);
+    point_to_ndc(butter, px1, py1, &nx1, &ny1);
+
+    vertices[i * 2] = (vertex_t){nx0, ny0, 0, 0, r, g, b, a};
+    vertices[i * 2 + 1] = (vertex_t){nx1, ny1, 0, 0, r, g, b, a};
   }
 
   butter_draw_cmd_t cmd = {0};
@@ -385,13 +409,17 @@ static void butter_draw_text(void *userdata, f32 x, f32 y, const string *text,
     return;
   }
 
-  if (!font->active_variant->atlas_texture_id) {
-    cheese_font_rebuild_atlas(font);
+  if (!font->active_variant->atlas_texture_id ||
+      font->active_variant->atlas_dirty) {
+    cheese_log_info("Font atlas not ready or dirty, rebuilding next frame");
+    return;
   }
 
   hb_buffer_t *hb_buffer = hb_buffer_create();
   hb_buffer_add_utf8(hb_buffer, (cstr *)text->base, text->len, 0, -1);
-  hb_buffer_guess_segment_properties(hb_buffer);
+  hb_buffer_set_direction(hb_buffer, HB_DIRECTION_LTR);
+  hb_buffer_set_script(hb_buffer, HB_SCRIPT_COMMON);
+  hb_buffer_set_language(hb_buffer, hb_language_from_string("en", -1));
   hb_shape(font->active_variant->hb_font, hb_buffer, NULL, 0);
 
   u32 glyph_count;
@@ -417,13 +445,6 @@ static void butter_draw_text(void *userdata, f32 x, f32 y, const string *text,
       cursor_y += y_advance * scale;
       continue;
     }
-
-    /*if (glyph_id == FT_Get_Char_Index(font->ft_face, 'M')) {
-      cheese_log_debug(
-          "M %d: bearing_x=%f, width=%f, u0=%f, v0=%f, u1=%f, v1=%f", glyph_id,
-          glyph->bearing_x, glyph->width, glyph->u0, glyph->v0, glyph->u1,
-          glyph->v1);
-    }*/
 
     f32 w = glyph->width * scale;
     f32 h = glyph->height * scale;
@@ -490,9 +511,12 @@ static i32 butter__create_texture(void *userdata, u32 width, u32 height,
   butter_renderer_t *renderer = (butter_renderer_t *)userdata;
   butter_t *butter = renderer->butter;
 
-  butter_texture_t *tex = butter_create_texture(
+  butter_texture_t *tex = butter_submit_texture_upload(
       butter, width, height, VK_FORMAT_R8G8B8A8_SRGB, data,
       (u64)width * height * 4, renderer->default_sampler);
+
+  while (!butter_texture_is_ready(tex))
+    ;
 
   if (tex->image == VK_NULL_HANDLE) {
     cheese_log_error("Failed to create texture");
@@ -504,10 +528,17 @@ static i32 butter__create_texture(void *userdata, u32 width, u32 height,
   return id;
 }
 
+static void butter__flush_deferred(void *userdata) {
+  butter_renderer_t *renderer = (butter_renderer_t *)userdata;
+  for (u32 i = 0; i < renderer->deferred_count; i++)
+    butter_texture_deregister(renderer->butter, renderer->deferred_ids[i]);
+  renderer->deferred_count = 0;
+}
+
 static void butter__destroy_texture(void *userdata, u32 texture_id) {
   butter_renderer_t *renderer = (butter_renderer_t *)userdata;
-  butter_t *butter = renderer->butter;
-  butter_texture_deregister(butter, texture_id);
+  if (renderer->deferred_count < 64)
+    renderer->deferred_ids[renderer->deferred_count++] = texture_id;
 }
 
 static butter_shader_t load_shader(arena_t *arena, const string *path,
@@ -644,6 +675,7 @@ cheese_renderer_t cheese_create_butter_renderer(butter_t *butter,
   cheese_renderer_t cheese_renderer = {0};
   cheese_renderer.userdata = renderer;
   cheese_renderer.create_texture = butter__create_texture;
+  cheese_renderer.flush_deferred = butter__flush_deferred;
   cheese_renderer.delete_texture = butter__destroy_texture;
 
   cheese_renderer.draw_rect = butter_draw_rect;
@@ -662,6 +694,7 @@ void cheese_destroy_butter_renderer(cheese_renderer_t *renderer) {
     return;
 
   butter_renderer_t *butter_renderer = (butter_renderer_t *)renderer->userdata;
+  renderer->flush_deferred(butter_renderer);
 
   if (butter_renderer->solid_pipeline.pipeline)
     butter_destroy_pipeline(butter_renderer->butter,

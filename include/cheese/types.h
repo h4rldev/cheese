@@ -74,6 +74,7 @@ struct cheese_renderer {
   void (*pop_clip)(void *userdata);
 
   i32 (*create_texture)(void *userdata, u32 width, u32 height, const u8 *data);
+  void (*flush_deferred)(void *userdata);
   void (*delete_texture)(void *userdata, u32 texture_id);
 };
 
@@ -171,6 +172,7 @@ typedef struct {
 
   f32 border_width;
   f32 corner_radius;
+  f32 widget_gap;
 
   b32 uniform_padding;
   union {
@@ -210,6 +212,7 @@ typedef void (*cheese_cursor_callback_t)(void *userdata,
 
 typedef struct {
   cheese_renderer_t *renderer;
+  arena_t *frame_arena;
   f32 mouse_x, mouse_y;
   f32 scroll_x, scroll_y;
 

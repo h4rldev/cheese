@@ -27,6 +27,7 @@ typedef struct {
   bread_window_t *window;
   butter_t *butter;
   arena_t *arena;
+  arena_t *frame_arena;
 
   cheese_renderer_t renderer;
   cheese_t cheese;
@@ -37,6 +38,9 @@ typedef struct {
   f32 scroll_h, scroll_v;
   u32 key_mods;
   f32 delta_time;
+
+  b32 checkbox1_checked;
+  b32 checkbox2_checked;
 } app_state_t;
 
 static void event_callback(bread_event_t *event, void *userdata) {
@@ -102,7 +106,7 @@ static void cursor_callback(void *userdata, cheese_cursor_t cursor) {
   app_state_t *state = (app_state_t *)userdata;
   bread_window_t *window = state->window;
 
-  cheese_log_debug("Cursor callback: %d", cursor);
+  // cheese_log_debug("Cursor callback: %d", cursor);
 
   switch (cursor) {
   case CHEESE_CURSOR_DEFAULT:
@@ -120,7 +124,8 @@ static void render_callback(vk_command_buffer_t cmd,
                             const butter_frame_t *frame, void *userdata) {
   app_state_t *state = (app_state_t *)userdata;
 
-  cheese_begin(&state->cheese, &state->renderer, state->mouse_x, state->mouse_y,
+  cheese_begin(&state->cheese, state->frame_arena, state->font,
+               &state->renderer, state->mouse_x, state->mouse_y,
                state->mouse_buttons, state->scroll_h, state->scroll_v,
                state->key_mods, state->delta_time);
 
@@ -132,26 +137,46 @@ static void render_callback(vk_command_buffer_t cmd,
 
   cheese_style_t container_style = cheese_default_style();
   container_style.bg_color = cheese_color_rgba(30, 30, 56, 255);
+  container_style.hover_color = cheese_color_rgba(88, 91, 112, 255);
   container_style.border_color = cheese_color_rgba(24, 24, 37, 255);
   container_style.text_color = cheese_color_rgba(255, 255, 255, 255);
   container_style.border_width = 1.0f;
   container_style.uniform_padding = true;
-  container_style.padding.uniform = 30.0f;
+  container_style.padding.uniform = 10.0f;
+  container_style.margin.uniform = 2.0f;
+  container_style.widget_gap = 20.0f;
+  container_style.uniform_margin = true;
   cheese_push_style(&state->cheese, container_style);
 
-  cheese_begin_container_auto(&state->cheese, 600, 500);
+  cheese_begin_container_auto(&state->cheese, 1200, 1000);
   {
-    string *label = string_from_cstr(state->arena, "Meow!");
+    string *label = string_from_cstr(state->frame_arena, "Meow!");
     if (cheese_button_auto(&state->cheese, label, state->font)) {
       cheese_log_info("Meow :3");
     }
 
-    cheese_style_set_font_size(&container_style, 40);
-
-    string *label2 = string_from_cstr(state->arena, "Woof!");
+    string *label2 = string_from_cstr(state->frame_arena, "Woof!");
     if (cheese_button_auto(&state->cheese, label2, state->font)) {
       cheese_log_info("Woof :DD");
     }
+
+    cheese_begin_container_auto(&state->cheese, 600, 500);
+    {
+      string *label3 = string_from_cstr(state->frame_arena, "Checkbox Nyan!");
+      state->checkbox1_checked = cheese_checkbox_auto(
+          &state->cheese, state->checkbox1_checked, label3, state->font);
+
+      string *label4 = string_from_cstr(state->frame_arena, "Checkbox WanWan!");
+      state->checkbox2_checked = cheese_checkbox_auto(
+          &state->cheese, state->checkbox2_checked, label4, state->font);
+
+      if (state->checkbox1_checked)
+        cheese_log_info("Checkbox 1 is checked, Nyan!");
+
+      if (state->checkbox2_checked)
+        cheese_log_info("Checkbox 2 is checked, WanWan!");
+    }
+    cheese_end_container(&state->cheese);
   }
   cheese_end_container(&state->cheese);
 
@@ -196,6 +221,7 @@ int main(void) {
 
   butter_set_clear_color(butter, 255, 255, 255, 255);
   butter_set_vsync(butter, true);
+  butter_set_target_refresh_rate(butter, 165.0f);
   butter_init_texture_upload(butter, 16);
 
   bread_cursor_init(&window);
@@ -239,13 +265,13 @@ int main(void) {
   }
 
   cheese_t cheese = cheese_default();
-
   app_state_t state = {0};
   state.cheese = cheese;
   state.window = &window;
   state.butter = butter;
   state.renderer = renderer;
   state.arena = perm_arena;
+  state.frame_arena = frame_arena;
   state.font = font;
   state.mouse_x = 0;
   state.mouse_y = 0;
@@ -254,6 +280,8 @@ int main(void) {
   state.scroll_v = 0;
   state.key_mods = 0;
   state.delta_time = 0;
+  state.checkbox1_checked = false;
+  state.checkbox2_checked = false;
 
   cheese_set_cursor_callback(&state.cheese, cursor_callback, &state);
   butter_set_draw_callback(butter, render_callback, &state);
@@ -266,6 +294,7 @@ int main(void) {
     bread_window_poll(&window);
 
     butter_request_frame(butter);
+    butter_wait_for_frame(butter);
 
     arena_clear(frame_arena);
   }

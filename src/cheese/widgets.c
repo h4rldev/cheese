@@ -45,10 +45,9 @@ u32 cheese_button_ex(cheese_t *cheese, f32 x, f32 y, f32 w, f32 h,
   b32 hovered = (cheese->mouse_x >= x && cheese->mouse_x <= x + w &&
                  cheese->mouse_y >= y && cheese->mouse_y <= y + h);
 
-  if (cheese->cursor_callback)
+  if (cheese->cursor_callback && hovered)
     cheese->cursor_callback(cheese->cursor_callback_userdata,
-                            hovered ? CHEESE_CURSOR_POINTER
-                                    : CHEESE_CURSOR_DEFAULT);
+                            CHEESE_CURSOR_POINTER);
 
   u32 result = 0;
   if (hovered) {
@@ -124,6 +123,111 @@ b32 cheese_button_auto(cheese_t *cheese, const string *label,
   f32 y = layout->y;
 
   b32 result = cheese_button(cheese, x, y, bw, bh, label, font, 0, 0, 0);
-  cheese_advance_cursor(cheese, bw, bh);
+  cheese_advance_cursor(cheese, bw + style->widget_gap, bh);
+  return result;
+}
+
+b32 cheese_checkbox(cheese_t *cheese, f32 x, f32 y, b32 checked,
+                    b32 change_cursor_state, const string *label,
+                    cheese_font_t *font) {
+  cheese_style_t *style = cheese_current_style(cheese);
+
+  u32 target_size = style->font_size ? style->font_size : font->default_size;
+  cheese_font_set_size(font, target_size);
+
+  f32 line_height = font->active_variant->line_height;
+  f32 box_size = line_height * 0.8f;
+  f32 label_spacing = 8.0f;
+
+  f32 text_w = 0;
+  if (label && label->len > 0)
+    text_w = cheese_font_measure_text(font, label);
+
+  f32 total_w = box_size + (text_w > 0 ? text_w + label_spacing : 0);
+
+  b32 hovered = (cheese->mouse_x >= x && cheese->mouse_x <= x + total_w &&
+                 cheese->mouse_y >= y && cheese->mouse_y <= y + box_size);
+
+  if (cheese->cursor_callback && hovered && change_cursor_state)
+    cheese->cursor_callback(cheese->cursor_callback_userdata,
+                            CHEESE_CURSOR_POINTER);
+
+  b32 result = checked;
+  if (hovered) {
+    u32 clicked = cheese->mouse_buttons & ~cheese->mouse_prev_buttons;
+    if (clicked & CHEESE_MOUSE_LEFT)
+      result = !checked;
+  }
+
+  cheese_color_t box_color = hovered ? style->hover_color : style->bg_color;
+  if (box_color == 0)
+    box_color = cheese_color_rgba(255, 255, 255, 255);
+
+  cheese_draw_rect(cheese, x, y, box_size, box_size, box_color);
+
+  if (style->border_width > 0.0f) {
+    cheese_color_t border_color = style->border_color;
+    f32 border_width = style->border_width;
+
+    cheese_draw_line(cheese, x, y, x + box_size, y, border_width, border_color);
+    cheese_draw_line(cheese, x, y + box_size, x + box_size, y + box_size,
+                     border_width, border_color);
+    cheese_draw_line(cheese, x, y, x, y + box_size, border_width, border_color);
+    cheese_draw_line(cheese, x + box_size, y, x + box_size, y + box_size,
+                     border_width, border_color);
+  }
+
+  if (result) {
+    cheese_color_t check_color = style->text_color;
+    if (check_color == 0)
+      check_color = 0x000000FF;
+
+    string *check_str = string_from_cstr(cheese->frame_arena, "✓");
+    f32 check_w = cheese_font_measure_text(font, check_str);
+    f32 check_h = font->active_variant->line_height;
+    f32 check_x = x + (box_size - check_w) / 2.0f;
+    f32 check_y = y + (box_size - check_h) / 2.0f + check_h * 0.75f;
+
+    cheese_draw_text(cheese, check_x, check_y, check_str, font, check_color,
+                     1.0f);
+  }
+
+  if (label && label->len > 0 && font) {
+    f32 text_x = x + box_size + label_spacing;
+    f32 text_y = y + (box_size - line_height) / 2.0f + line_height * 0.75f;
+
+    cheese_color_t text_color = style->text_color;
+    if (text_color == 0)
+      text_color = cheese_color_rgba(0, 0, 0, 255);
+
+    cheese_draw_text(cheese, text_x, text_y, label, font, text_color, 1.0f);
+  }
+
+  return result;
+}
+
+b32 cheese_checkbox_auto(cheese_t *cheese, b32 checked, const string *label,
+                         cheese_font_t *font) {
+  cheese_layout_t *layout = cheese_current_layout(cheese);
+  cheese_style_t *style = cheese_current_style(cheese);
+
+  u32 target_size = style->font_size ? style->font_size : font->default_size;
+  cheese_font_set_size(font, target_size);
+
+  f32 line_height = font->active_variant->line_height;
+  f32 box_size = line_height * 0.8f;
+
+  f32 text_w =
+      (label && label->len > 0) ? cheese_font_measure_text(font, label) : 0.0f;
+  f32 spacing = 0.0f;
+
+  f32 total_w = box_size + (text_w > 0 ? text_w + spacing : 0.0f);
+  f32 total_h = box_size;
+
+  f32 x = layout->x;
+  f32 y = layout->y;
+
+  b32 result = cheese_checkbox(cheese, x, y, checked, false, label, font);
+  cheese_advance_cursor(cheese, total_w + style->widget_gap, total_h);
   return result;
 }

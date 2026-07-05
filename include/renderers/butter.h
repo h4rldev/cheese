@@ -18,6 +18,9 @@ typedef struct {
 
   vk_rect2d_t clip_stack[32];
   u32 clip_stack_depth;
+
+  u32 deferred_count;
+  u32 deferred_ids[64];
 } butter_renderer_t;
 
 cheese_renderer_t cheese_create_butter_renderer(butter_t *butter,

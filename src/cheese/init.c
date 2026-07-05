@@ -1,3 +1,4 @@
+#include "cheese/font.h"
 #include <cheese/init.h>
 #include <cheese/layout.h>
 #include <cheese/style.h>
@@ -21,11 +22,12 @@ void cheese_set_cursor_callback(cheese_t *cheese, cheese_cursor_callback_t cb,
   cheese->cursor_callback_userdata = userdata;
 }
 
-void cheese_begin(cheese_t *cheese, cheese_renderer_t *renderer, f32 mouse_x,
-                  f32 mouse_y, u32 mouse_buttons, f32 scroll_x, f32 scroll_y,
-                  u32 key_mods, f32 delta_time) {
-
+void cheese_begin(cheese_t *cheese, arena_t *frame_arena, cheese_font_t *font,
+                  cheese_renderer_t *renderer, f32 mouse_x, f32 mouse_y,
+                  u32 mouse_buttons, f32 scroll_x, f32 scroll_y, u32 key_mods,
+                  f32 delta_time) {
   cheese->renderer = renderer;
+  cheese->frame_arena = frame_arena;
   cheese->mouse_x = mouse_x;
   cheese->mouse_y = mouse_y;
   cheese->scroll_x = scroll_x;
@@ -42,9 +44,16 @@ void cheese_begin(cheese_t *cheese, cheese_renderer_t *renderer, f32 mouse_x,
   cheese->layout_stack_depth = 1;
   cheese->style_stack_depth = 1;
 
-  /*if (cheese->cursor_callback)
+  if (cheese->cursor_callback)
     cheese->cursor_callback(cheese->cursor_callback_userdata,
-                            CHEESE_CURSOR_DEFAULT);*/
+                            CHEESE_CURSOR_DEFAULT);
+
+  renderer->flush_deferred(renderer->userdata);
+
+  if (font && (!font->active_variant->atlas_texture_id ||
+               font->active_variant->atlas_dirty)) {
+    cheese_font_rebuild_atlas(font);
+  }
 }
 
 void cheese_end(cheese_t *cheese) {

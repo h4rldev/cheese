@@ -10,6 +10,7 @@ cheese_style_t cheese_default_style(void) {
       .text_color = cheese_color_rgba(255, 255, 255, 255),
       .border_width = 0.0f,
       .corner_radius = 0.0f,
+      .widget_gap = 8.0f,
       .uniform_padding = true,
       .padding.uniform = 0.0f,
       .uniform_margin = true,
