@@ -6,6 +6,7 @@
     flake-utils.url = "github:numtide/flake-utils";
     bread.url = "git+https://codeberg.org/h4rl/bread";
     butter.url = "git+https://codeberg.org/h4rl/butter";
+    conjure.url = "git+https://codeberg.org/h4rl/conjure";
     htils.url = "github:h4rldev/htils";
   };
 
@@ -15,22 +16,99 @@
     nixpkgs,
     bread,
     butter,
+    conjure,
     htils,
   }:
     flake-utils.lib.eachDefaultSystem (system: let
       pkgs = import nixpkgs {inherit system;};
+      pversion = "0.1.0";
+
+      nativeInputs = [
+        conjure.packages.${system}.default
+        pkgs.gcc
+        pkgs.mold
+        pkgs.harfbuzz
+        pkgs.freetype
+        htils.packages.${system}.htils-threadsafe
+      ];
+
+      mkCheese = {
+        name,
+        profile,
+        artifact,
+        pc,
+      }: let
+        artifactStem =
+          pkgs.lib.removePrefix "lib"
+          (pkgs.lib.removeSuffix ".so"
+            (pkgs.lib.removeSuffix ".a" (baseNameOf artifact)));
+      in
+        pkgs.stdenv.mkDerivation {
+          pname = name;
+          version = pversion;
+
+          src = ./.;
+
+          nativeBuildInputs = nativeInputs;
+
+          buildPhase = ''
+            runHook preBuild
+            conjure as ${profile} build
+            runHook postBuild
+          '';
+
+          installPhase = ''
+            runHook preInstall
+            mkdir -p $out/lib/pkgconfig
+            mkdir -p $out/include/cheese
+
+            cp ${artifact} $out/lib
+            sed -e "s|^prefix=.*|prefix=$out|" \
+              -e "s|^libdir=.*|libdir=$out/lib|" \
+              lib/${profile}/pkgconfig/${artifactStem}.pc \
+              > $out/lib/pkgconfig/${pc}
+
+            cp -r include/cheese/* $out/include/cheese
+            cp include/cheese.h $out/include
+
+            runHook postInstall
+          '';
+        };
     in {
+      packages = {
+        cheese = mkCheese {
+          name = "cheese";
+          profile = "release";
+          artifact = "lib/release/libcheese.so";
+          pc = "cheese.pc";
+        };
+
+        cheese-static = mkCheese {
+          name = "cheese-static";
+          profile = "release-static";
+          artifact = "lib/release-static/libcheese.a";
+          pc = "cheese-static.pc";
+        };
+
+        cheese-debug = mkCheese {
+          name = "cheese-debug";
+          profile = "debug";
+          artifact = "lib/debug/libcheese-debug.a";
+          pc = "cheese-debug.pc";
+        };
+      };
+
       devShells.default = pkgs.mkShell {
         name = "cheese-dev";
 
         packages = with pkgs; [
           clang-tools
-          just
           nixd
           bear
           vulkan-tools
           shaderc
           tokei
+          conjure.packages.${system}.default
         ];
 
         nativeBuildInputs = with pkgs; [
@@ -61,6 +139,13 @@
           harfbuzz
           freetype
           pkg-config
+          gdb
+          xxd
+
+          raylib
+          sdl3
+          sdl2-compat
+          sokol
         ];
 
         shellHook = ''

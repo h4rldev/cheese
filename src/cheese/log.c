@@ -1,11 +1,16 @@
+/***********************************/
+
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <threads.h>
 
 #include <htils/basictypes.h>
 
 #include <cheese/log.h>
 #include <cheese/types.h>
+
+/***********************************/
 
 #define COLOR_RESET "\x1b[0m"
 #define COLOR_DARK_RED "\x1b[31m"
@@ -26,6 +31,11 @@ static thread_local cheese_log_entry_t history[CHEESE_LOG_HISTORY_SIZE] = {0};
 static thread_local u32 history_count = 0;
 static thread_local u64 last_hash = 0;
 static thread_local b32 line_active = false;
+static once_flag log_atexit_once = ONCE_FLAG_INIT;
+
+//
+//
+//
 
 static u64 cheese_log_hash(const cstr *level, const cstr *msg) {
   u64 h = 0xcbf29ce484222325ULL;
@@ -35,6 +45,10 @@ static u64 cheese_log_hash(const cstr *level, const cstr *msg) {
     h = (h ^ (u64)(u8)*p) * 0x100000001b3ULL;
   return h;
 }
+
+//
+//
+//
 
 static cheese_log_entry_t *cheese_log_find(u64 hash) {
   for (u32 i = 0; i < history_count; i++) {
@@ -51,11 +65,35 @@ static cheese_log_entry_t *cheese_log_find(u64 hash) {
   return &history[idx];
 }
 
+//
+//
+//
+
+static void cheese_log_atexit(void) {
+  if (line_active) {
+    fputc('\n', stderr);
+    fflush(stderr);
+    line_active = false;
+  }
+}
+
+//
+//
+//
+
+static void cheese_log_register_atexit(void) { atexit(cheese_log_atexit); }
+
+//
+//
+//
+
 void cheese_log(cheese_log_level_t level, const cstr *fmt, ...) {
 #ifndef CHEESE_DEBUG
   if (level == CHEESE_LOG_DEBUG)
     return;
 #endif
+
+  call_once(&log_atexit_once, cheese_log_register_atexit);
 
   static cstr level_str[20] = {0};
   static cstr fmt_str[4096] = {0};

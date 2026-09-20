@@ -1,0 +1,282 @@
+project {
+  name cheese
+  language c
+  type library
+  link static
+
+  compile {
+    src "src/cheese"
+    standard gnu11
+    include "include"
+    linker "mold"
+  }
+
+  profiles {
+    debug {
+      artifact "cheese-debug"
+      c_flags -DCHEESE_DEBUG -ggdb -g -Og "-fsanitize=address,undefined,leak" "-fno-sanitize-recover=all" -fno-omit-frame-pointer -fno-optimize-sibling-calls -fsanitize-address-use-after-scope -fno-common -Wall -Wextra -Wpedantic -Wno-unused-parameter
+      ld_flags -lhtils-threadsafe -lharfbuzz -lfreetype -lm "-fsanitize=address,undefined,leak" "-fno-sanitize-recover=all" -fno-omit-frame-pointer -fno-optimize-sibling-calls -fsanitize-address-use-after-scope -fno-common -static-libasan
+
+
+      tests {
+        semantics {
+          src "src/tests/semantics.c"
+        }
+
+        input {
+          src "src/tests/input.c"
+        }
+
+        focus {
+          src "src/tests/focus.c"
+        }
+
+        activation {
+          src "src/tests/activation.c"
+        }
+
+        debug {
+          src "src/tests/debug.c"
+        }
+
+        tree {
+          src "src/tests/tree.c"
+        }
+
+        anim {
+          src "src/tests/anim.c"
+        }
+
+        style {
+          src "src/tests/style.c"
+        }
+
+        theme {
+          src "src/tests/theme.c"
+        }
+
+        app {
+          src "src/tests/app.c"
+        }
+
+        layout {
+          src "src/tests/layout.c"
+        }
+
+        slider {
+          src "src/tests/slider.c"
+        }
+
+        scrollbar {
+          src "src/tests/scrollbar.c"
+        }
+
+        radio {
+          src "src/tests/radio.c"
+        }
+
+        text {
+          src "src/tests/text.c"
+        }
+
+        text_wrap {
+          src "src/tests/text_wrap.c"
+        }
+
+        dropdown {
+          src "src/tests/dropdown.c"
+        }
+
+        popup {
+          src "src/tests/popup.c"
+        }
+
+        modal {
+          src "src/tests/modal.c"
+        }
+
+        image {
+          src "src/tests/image.c"
+        }
+
+        tabs {
+          src "src/tests/tabs.c"
+        }
+
+        list {
+          src "src/tests/list.c"
+        }
+
+        widget {
+          src "src/tests/widget.c"
+        }
+
+        toast {
+          src "src/tests/toast.c"
+        }
+
+        snapshot {
+          src "src/tests/snapshot.c"
+        }
+
+        nav {
+          src "src/tests/nav.c"
+        }
+
+        gauge {
+          src "src/tests/gauge.c"
+        }
+
+        scoped {
+          src "src/tests/scoped.c"
+        }
+
+        cursor {
+          src "src/tests/cursor.c"
+        }
+
+        clipboard {
+          src "src/tests/clipboard.c"
+        }
+
+        selectable {
+          src "src/tests/selectable.c"
+        }
+
+        selection {
+          src "src/tests/selection.c"
+        }
+      }
+    }
+
+    release {
+      link dynamic
+      c_flags -O2
+      ld_flags -lhtils-threadsafe -lharfbuzz -lfreetype -lm
+    }
+
+    release-static {
+      extends release
+      link static
+    }
+
+    butter-wayland-debug {
+      extends debug
+      c_flags -DCHEESE_WAYLAND -DBUTTER_DEBUG
+
+      tests {
+        butter-wayland {
+          src "examples/butter.c" "renderers/butter.c"
+          ld_flags -lbutter-wayland -lbread-wayland -lwayland-client -lwayland-cursor -lxkbcommon -lvulkan -ldl
+        }
+      }
+    }
+
+    butter-wayland-release {
+      extends release
+      c_flags -DCHEESE_WAYLAND
+
+      tests {
+        butter-wayland {
+          src "examples/butter.c" "renderers/butter.c"
+          ld_flags -lbutter-wayland -lbread-wayland -lwayland-client -lwayland-cursor -lxkbcommon -lvulkan -ldl
+        }
+      }
+    }
+
+    butter-x11-debug {
+      extends debug
+      c_flags -DCHEESE_X11 -DBUTTER_DEBUG
+
+      tests {
+        butter-x11 {
+          src "examples/butter.c" "renderers/butter.c"
+          ld_flags -lbutter-x11 -lbread-x11 -lxkbcommon -lxkbcommon-x11 -lxcb -lxcb-icccm -lxcb-cursor -lxcb-randr -lvulkan -ldl
+        }
+      }
+    }
+
+    butter-x11-release {
+      extends release
+      c_flags -DCHEESE_X11
+
+      tests {
+        butter-x11 {
+          src "examples/butter.c" "renderers/butter.c"
+          ld_flags -lbutter-x11 -lbread-x11 -lxkbcommon -lxkbcommon-x11 -lxcb -lxcb-icccm -lxcb-cursor -lxcb-randr -lvulkan -ldl
+        }
+      }
+    }
+
+    raylib-debug {
+      extends debug
+
+      tests {
+        raylib {
+          src "examples/raylib.c" "renderers/raylib.c"
+          ld_flags -lraylib -lm
+        }
+      }
+    }
+
+    raylib-release {
+      extends release
+
+      tests {
+        raylib {
+          src "examples/raylib.c" "renderers/raylib.c"
+          ld_flags -lraylib -lm
+        }
+      }
+    }
+
+    sdl3-debug {
+      extends debug
+
+      tests {
+        sdl3 {
+          src "examples/sdl3.c" "renderers/sdl3.c"
+          ld_flags -lSDL3 -lm
+        }
+      }
+    }
+
+    sdl3-release {
+      extends release
+
+      tests {
+        sdl3 {
+          src "examples/sdl3.c" "renderers/sdl3.c"
+          ld_flags -lSDL3 -lm
+        }
+      }
+    }
+
+    sdl2-debug {
+      extends debug
+
+      tests {
+        sdl2 {
+          src "examples/sdl2.c" "renderers/sdl2.c"
+          ld_flags -lSDL2 -lSDL3 -lm
+        }
+      }
+    }
+
+    sdl2-release {
+      extends release
+
+      tests {
+        sdl2 {
+          src "examples/sdl2.c" "renderers/sdl2.c"
+          ld_flags -lSDL2 -lSDL3 -lm
+        }
+      }
+    }
+
+  }
+
+  output {
+    symlink_binaries #true
+  }
+}
