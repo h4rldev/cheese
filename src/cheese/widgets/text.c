@@ -974,7 +974,9 @@ b32 cheese_text_input(cheese_t *cheese, const cstr *classes,
   cheese_color_t text_color = style.text_color ? style.text_color : 0x000000FF;
   cheese_color_t sel_color = style.focus_color ? style.focus_color : 0x3B82F680;
 
-  cheese_draw_rect(cheese, style.corner_radius, x, y, w, h, bg);
+  f32 alpha =
+      cheese_style_get_prop_f32(&style, cheese->core_props.opacity, 1.0f);
+  cheese_draw_bg(cheese, &style, x, y, w, h, bg, 0, alpha);
   cheese_draw_border(cheese, &style, x, y, w, h);
 
   cheese_widget_emit(cheese, semantics, CHEESE_ROLE_TEXT_INPUT, null, cur, 0,

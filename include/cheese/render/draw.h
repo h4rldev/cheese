@@ -36,6 +36,44 @@ void cheese_draw_rect(cheese_t *cheese, cheese_corners_t radius, f32 x, f32 y,
 //
 
 /**
+ * @brief Draw a rounded rectangle with a linear gradient.
+ *
+ * @param cheese The cheese context.
+ * @param radius Per-corner radius.
+ * @param x,y,w,h The rect.
+ * @param colors The gradient colours.
+ */
+void cheese_draw_rect_gradient(cheese_t *cheese, cheese_corners_t radius, f32 x,
+                               f32 y, f32 w, f32 h, cheese_gradient_t colors);
+
+//
+//
+//
+
+/**
+ * @brief Fill a rect with a style's background, gradient-aware.
+ * @details Uses the `"bg/gradient"` property (see @ref
+ * cheese_core_style_props_t) when present, tinting each of its four corners by
+ * the style's `state_layer_color` at the alpha for @p state (see @ref
+ * cheese_state_layer_alpha); otherwise draws @p flat. This is the standard
+ * widget-background fill: pass the same @p state the caller gave @ref
+ * cheese_style_apply_state, and the flat @c bg_color it left behind.
+ *
+ * @param cheese The cheese context.
+ * @param style The resolved style (read for its gradient and state layer).
+ * @param x,y,w,h The rect.
+ * @param flat The plain fill colour when no gradient is set.
+ * @param state The interaction-state bits, for the state-layer tint.
+ * @param alpha Multiply the resolved opacity by this.
+ */
+void cheese_draw_bg(cheese_t *cheese, const cheese_style_t *style, f32 x, f32 y,
+                    f32 w, f32 h, cheese_color_t flat, u32 state, f32 alpha);
+
+//
+//
+//
+
+/**
  * @brief Draw a widget's border ring from its resolved style.
  * @details One draw: a rounded-rect ring whose thickness, sides and colour come
  * from the `"border/width"`, `"border/sides"` and `"border/color"` properties

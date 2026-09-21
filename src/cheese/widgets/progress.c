@@ -17,6 +17,23 @@
 
 /***********************************/
 
+static u32 progress_prop_track_opacity;
+static u32 progress_prop_fill_opacity;
+
+static void cheese_progress_props(cheese_t *cheese) {
+  if (progress_prop_track_opacity)
+    return;
+
+  progress_prop_track_opacity =
+      cheese_prop_register(cheese, "progress/track/opacity", CHEESE_PROP_F32);
+  progress_prop_fill_opacity =
+      cheese_prop_register(cheese, "progress/fill/opacity", CHEESE_PROP_F32);
+}
+
+//
+//
+//
+
 void cheese_progress_bar(cheese_t *cheese, const cstr *classes,
                          cheese_semantics_t semantics, f32 x, f32 y, f32 w,
                          f32 h, cheese_value_t value) {
@@ -34,6 +51,8 @@ void cheese_progress_bar(cheese_t *cheese, const cstr *classes,
                         value_str, 0,
                         (cheese_rect_t){(i32)x, (i32)y, (u32)w, (u32)h});
 
+  cheese_progress_props(cheese);
+
   cheese_color_t track_color = style.bg_color;
   if (track_color == 0)
     track_color = cheese_color_rgba(40, 40, 40, 255);
@@ -42,11 +61,18 @@ void cheese_progress_bar(cheese_t *cheese, const cstr *classes,
   if (fill_color == 0)
     fill_color = cheese_color_rgba(255, 255, 255, 255);
 
-  cheese_draw_rect(cheese, style.corner_radius, x, y, w, h, track_color);
+  f32 whole =
+      cheese_style_get_prop_f32(&style, cheese->core_props.opacity, 1.0f);
+  f32 track_alpha =
+      cheese_style_get_prop_f32(&style, progress_prop_track_opacity, whole);
+  f32 fill_alpha =
+      cheese_style_get_prop_f32(&style, progress_prop_fill_opacity, whole);
+
+  cheese_draw_bg(cheese, &style, x, y, w, h, track_color, 0, track_alpha);
 
   if (progress > 0.0f)
-    cheese_draw_rect(cheese, style.corner_radius, x, y, w * progress, h,
-                     fill_color);
+    cheese_draw_bg(cheese, &style, x, y, w * progress, h, fill_color, 0,
+                   fill_alpha);
 
   cheese_draw_border(cheese, &style, x, y, w, h);
 }

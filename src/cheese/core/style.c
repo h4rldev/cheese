@@ -216,27 +216,10 @@ static inline void warn_if_float_will_get_inherited(const cstr *scope) {
 //
 //
 
-static f32 cheese_state_layer_alpha(u32 state) {
-  if (state & CHEESE_STATE_DISABLED)
-    return 0.12f;
-  if (state & CHEESE_STATE_PRESSED)
-    return 0.12f;
-  if (state & CHEESE_STATE_HOVERED)
-    return 0.08f;
-  if (state & CHEESE_STATE_FOCUSED)
-    return 0.10f;
-
-  return 0.0f;
-}
-
-//
-//
-//
-
 /**
  * @brief Apply one lexical scope to @c style.
- * @details Copies set style values, then merges the scope's class names. Used
- * by both resolvers so the style and class belonging to one scope stay
+ * @details Copies set style values, then merges the scope's class names.
+ * Used by both resolvers so the style and class belonging to one scope stay
  * together.
  *
  * @param cheese The cheese context.
@@ -584,6 +567,19 @@ void cheese_style_set_prop_u32(cheese_t *cheese, cheese_style_t *style,
                         (cheese_prop_t){.kind = CHEESE_PROP_U32, .u32 = value});
 }
 
+void cheese_style_set_prop_gradient(cheese_t *cheese, cheese_style_t *style,
+                                    u32 prop, cheese_gradient_t gradient) {
+  if (!cheese || !style || prop == 0 || !cheese->frame_arena)
+    return;
+
+  cheese_gradient_t *copy =
+      arena_alloc(cheese->frame_arena, cheese_gradient_t, 1);
+  *copy = gradient;
+
+  cheese_style_set_prop(cheese, style, prop,
+                        (cheese_prop_t){.kind = CHEESE_PROP_PTR, .ptr = copy});
+}
+
 b32 cheese_style_get_prop(const cheese_style_t *style, u32 prop,
                           cheese_prop_t *out) {
   if (!style || prop == 0)
@@ -632,6 +628,18 @@ u32 cheese_style_get_prop_u32(const cheese_style_t *style, u32 prop,
   return fallback;
 }
 
+cheese_gradient_t cheese_style_get_prop_gradient(const cheese_style_t *style,
+                                                 u32 prop,
+                                                 cheese_gradient_t fallback) {
+  cheese_prop_t value;
+  if (cheese_style_get_prop(style, prop, &value) &&
+      value.kind == CHEESE_PROP_PTR) {
+    return *(cheese_gradient_t *)value.ptr;
+  }
+
+  return fallback;
+}
+
 void cheese_style_register_core_props(cheese_t *cheese) {
   if (!cheese)
     return;
@@ -648,6 +656,10 @@ void cheese_style_register_core_props(cheese_t *cheese) {
       cheese, CHEESE_PROP_FOCUS_RING_WIDTH, CHEESE_PROP_F32);
   cheese->core_props.focus_ring_offset = cheese_prop_register(
       cheese, CHEESE_PROP_FOCUS_RING_OFFSET, CHEESE_PROP_F32);
+  cheese->core_props.bg_gradient =
+      cheese_prop_register(cheese, CHEESE_PROP_BG_GRADIENT, CHEESE_PROP_PTR);
+  cheese->core_props.opacity =
+      cheese_prop_register(cheese, CHEESE_PROP_OPACITY, CHEESE_PROP_F32);
 }
 
 cheese_style_t *cheese_current_style(cheese_t *cheese) {
@@ -749,6 +761,19 @@ void cheese_style_apply_classes(cheese_t *cheese, cheese_style_t *style,
   }
 }
 
+f32 cheese_style_state_layer_alpha(u32 state) {
+  if (state & CHEESE_STATE_DISABLED)
+    return 0.12f;
+  if (state & CHEESE_STATE_PRESSED)
+    return 0.12f;
+  if (state & CHEESE_STATE_HOVERED)
+    return 0.08f;
+  if (state & CHEESE_STATE_FOCUSED)
+    return 0.10f;
+
+  return 0.0f;
+}
+
 void cheese_style_apply_state(cheese_style_t *style, u32 state) {
   if (!style)
     return;
@@ -768,7 +793,7 @@ void cheese_style_apply_state(cheese_style_t *style, u32 state) {
     return;
   }
 
-  f32 alpha = cheese_state_layer_alpha(state);
+  f32 alpha = cheese_style_state_layer_alpha(state);
   if (alpha > 0.0f && style->state_layer_color && style->bg_color)
     style->bg_color =
         cheese_color_lerp(style->bg_color, style->state_layer_color, alpha);

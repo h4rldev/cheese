@@ -19,6 +19,23 @@
 
 /***********************************/
 
+static u32 tabs_prop_selected_opacity;
+static u32 tabs_prop_background_opacity;
+
+static void cheese_tabs_props(cheese_t *cheese) {
+  if (tabs_prop_selected_opacity)
+    return;
+
+  tabs_prop_selected_opacity =
+      cheese_prop_register(cheese, "tabs/selected/opacity", CHEESE_PROP_F32);
+  tabs_prop_background_opacity =
+      cheese_prop_register(cheese, "tabs/background/opacity", CHEESE_PROP_F32);
+}
+
+//
+//
+//
+
 i32 cheese_tab_bar(cheese_t *cheese, const cstr *classes,
                    cheese_semantics_t semantics, f32 x, f32 y, f32 w, f32 h,
                    cheese_value_t selected, const cstr *const *labels,
@@ -63,10 +80,19 @@ i32 cheese_tab_bar(cheese_t *cheese, const cstr *classes,
       tab_w[i] += extra;
   }
 
+  cheese_tabs_props(cheese);
+
   cheese_color_t bg = style.bg_color;
   cheese_color_t hover = style.hover_color ? style.hover_color : 0x3B82F640;
   cheese_color_t accent = style.focus_color ? style.focus_color : 0xFFFFFFFF;
   cheese_color_t text_color = style.text_color ? style.text_color : 0x000000FF;
+
+  f32 whole =
+      cheese_style_get_prop_f32(&style, cheese->core_props.opacity, 1.0f);
+  f32 selected_alpha =
+      cheese_style_get_prop_f32(&style, tabs_prop_selected_opacity, whole);
+  f32 bg_alpha =
+      cheese_style_get_prop_f32(&style, tabs_prop_background_opacity, whole);
 
   f32 tx = x;
   for (u32 i = 0; i < count; i++) {
@@ -80,9 +106,10 @@ i32 cheese_tab_bar(cheese_t *cheese, const cstr *classes,
                         &scope);
 
     if (is_sel)
-      cheese_draw_rect(cheese, style.corner_radius, tx, y, tab_w[i], h, hover);
+      cheese_draw_bg(cheese, &style, tx, y, tab_w[i], h, hover, 0,
+                     selected_alpha);
     else if (scope.hovered && bg)
-      cheese_draw_rect(cheese, style.corner_radius, tx, y, tab_w[i], h, bg);
+      cheese_draw_bg(cheese, &style, tx, y, tab_w[i], h, bg, 0, bg_alpha);
 
     if (font && label[0]) {
       string *label_str = string_from_cstr(cheese->frame_arena, label);

@@ -50,6 +50,33 @@ static inline void unpack_color(u32 color, f32 *r, f32 *g, f32 *b, f32 *a) {
   *a = ((color >> 24) & 0xFF) / 255.0f;
 }
 
+typedef struct {
+  f32 r, g, b, a;
+} butter_rgba_t;
+
+//
+//
+//
+
+static butter_rgba_t butter_gradient_at(f32 px, f32 py, f32 x, f32 y, f32 w,
+                                        f32 h, const butter_rgba_t *tl,
+                                        const butter_rgba_t *tr,
+                                        const butter_rgba_t *bl,
+                                        const butter_rgba_t *br) {
+  f32 u = w > 0.0f ? (px - x) / w : 0.0f;
+  f32 v = h > 0.0f ? (py - y) / h : 0.0f;
+
+  f32 ux = 1.0f - u;
+  f32 vy = 1.0f - v;
+
+  butter_rgba_t out;
+  out.r = tl->r * ux * vy + tr->r * u * vy + bl->r * ux * v + br->r * u * v;
+  out.g = tl->g * ux * vy + tr->g * u * vy + bl->g * ux * v + br->g * u * v;
+  out.b = tl->b * ux * vy + tr->b * u * vy + bl->b * ux * v + br->b * u * v;
+  out.a = tl->a * ux * vy + tr->a * u * vy + bl->a * ux * v + br->a * u * v;
+  return out;
+}
+
 static void butter_renderer_submit(butter_renderer_t *renderer) {
   if (renderer->draw_cmd_count == 0)
     return;
@@ -105,9 +132,12 @@ static void point_to_ndc(butter_t *butter, f32 x, f32 y, f32 *ndc_x,
   *ndc_y = -((y / height) * 2.0f - 1.0f);
 }
 
-static void butter_emit_arc_ndc(butter_t *butter, vertex_t *v, u32 *n, f32 cx,
-                                f32 cy, f32 cr, f32 a0, f32 a1, u32 count,
-                                f32 r, f32 g, f32 b, f32 a) {
+static void butter_emit_arc_ndc(butter_t *butter, vertex_t *v, u32 *n, f32 x,
+                                f32 y, f32 w, f32 h, const butter_rgba_t *tl,
+                                const butter_rgba_t *tr,
+                                const butter_rgba_t *bl,
+                                const butter_rgba_t *br, f32 cx, f32 cy, f32 cr,
+                                f32 a0, f32 a1, u32 count) {
   for (u32 i = 0; i < count; i++) {
     f32 t = a0 + (f32)i / (f32)(count - 1) * (a1 - a0);
     f32 px = cx + cr * cosf(t);
@@ -115,17 +145,22 @@ static void butter_emit_arc_ndc(butter_t *butter, vertex_t *v, u32 *n, f32 cx,
     f32 nx, ny;
     point_to_ndc(butter, px, py, &nx, &ny);
 
-    v[(*n)++] = (vertex_t){nx, ny, 0, 0, r, g, b, a};
+    butter_rgba_t c = butter_gradient_at(px, py, x, y, w, h, tl, tr, bl, br);
+    v[(*n)++] = (vertex_t){nx, ny, 0, 0, c.r, c.g, c.b, c.a};
   }
 }
 
-static void butter_draw_rect(void *userdata, cheese_corners_t radius, f32 x,
-                             f32 y, f32 w, f32 h, cheese_color_t color) {
+static void butter_draw_rect_gradient(void *userdata, cheese_corners_t radius,
+                                      f32 x, f32 y, f32 w, f32 h,
+                                      cheese_gradient_t colors) {
   butter_renderer_t *renderer = (butter_renderer_t *)userdata;
   butter_t *butter = renderer->butter;
 
-  f32 r, g, b, a;
-  unpack_color(color, &r, &g, &b, &a);
+  butter_rgba_t tl_c, tr_c, bl_c, br_c;
+  unpack_color(colors.top_left, &tl_c.r, &tl_c.g, &tl_c.b, &tl_c.a);
+  unpack_color(colors.top_right, &tr_c.r, &tr_c.g, &tr_c.b, &tr_c.a);
+  unpack_color(colors.bottom_left, &bl_c.r, &bl_c.g, &bl_c.b, &bl_c.a);
+  unpack_color(colors.bottom_right, &br_c.r, &br_c.g, &br_c.b, &br_c.a);
 
   f32 tl = radius.top_left > 0 ? radius.top_left : 0.0f;
   f32 tr = radius.top_right > 0 ? radius.top_right : 0.0f;
@@ -158,10 +193,10 @@ static void butter_draw_rect(void *userdata, cheese_corners_t radius, f32 x,
     f32 x0, y0, x1, y1;
     screen_to_ndc(butter, x, y, w, h, &x0, &y0, &x1, &y1);
     vertex_t *v = alloc.mapped;
-    v[0] = (vertex_t){x0, y0, 0, 0, r, g, b, a};
-    v[1] = (vertex_t){x1, y0, 1, 0, r, g, b, a};
-    v[2] = (vertex_t){x0, y1, 0, 1, r, g, b, a};
-    v[3] = (vertex_t){x1, y1, 1, 1, r, g, b, a};
+    v[0] = (vertex_t){x0, y0, 0, 0, tl_c.r, tl_c.g, tl_c.b, tl_c.a};
+    v[1] = (vertex_t){x1, y0, 1, 0, tr_c.r, tr_c.g, tr_c.b, tr_c.a};
+    v[2] = (vertex_t){x0, y1, 0, 1, bl_c.r, bl_c.g, bl_c.b, bl_c.a};
+    v[3] = (vertex_t){x1, y1, 1, 1, br_c.r, br_c.g, br_c.b, br_c.a};
 
     butter_draw_cmd_t cmd = {0};
     cmd.pipeline = renderer->solid_pipeline;
@@ -184,7 +219,9 @@ static void butter_draw_rect(void *userdata, cheese_corners_t radius, f32 x,
 
   f32 cxn, cyn;
   point_to_ndc(butter, x + w * 0.5f, y + h * 0.5f, &cxn, &cyn);
-  v[0] = (vertex_t){cxn, cyn, 0, 0, r, g, b, a};
+  butter_rgba_t cc = butter_gradient_at(x + w * 0.5f, y + h * 0.5f, x, y, w, h,
+                                        &tl_c, &tr_c, &bl_c, &br_c);
+  v[0] = (vertex_t){cxn, cyn, 0, 0, cc.r, cc.g, cc.b, cc.a};
 
   struct {
     f32 cx, cy, cr, a0, a1;
@@ -200,13 +237,15 @@ static void butter_draw_rect(void *userdata, cheese_corners_t radius, f32 x,
     if (corners[c].cr <= 0.0f) {
       f32 nx, ny;
       point_to_ndc(butter, corners[c].cx, corners[c].cy, &nx, &ny);
-      v[n++] = (vertex_t){nx, ny, 0, 0, r, g, b, a};
+      butter_rgba_t p = butter_gradient_at(corners[c].cx, corners[c].cy, x, y,
+                                           w, h, &tl_c, &tr_c, &bl_c, &br_c);
+      v[n++] = (vertex_t){nx, ny, 0, 0, p.r, p.g, p.b, p.a};
       continue;
     }
 
-    butter_emit_arc_ndc(butter, v, &n, corners[c].cx, corners[c].cy,
-                        corners[c].cr, corners[c].a0, corners[c].a1, SEG, r, g,
-                        b, a);
+    butter_emit_arc_ndc(butter, v, &n, x, y, w, h, &tl_c, &tr_c, &bl_c, &br_c,
+                        corners[c].cx, corners[c].cy, corners[c].cr,
+                        corners[c].a0, corners[c].a1, SEG);
   }
 
   v[n++] = v[1];
@@ -217,6 +256,12 @@ static void butter_draw_rect(void *userdata, cheese_corners_t radius, f32 x,
   cmd.vertex_buffer = alloc.buffer;
   cmd.vertex_offset = alloc.offset;
   butter_renderer_queue(renderer, &cmd);
+}
+
+static void butter_draw_rect(void *userdata, cheese_corners_t radius, f32 x,
+                             f32 y, f32 w, f32 h, cheese_color_t color) {
+  butter_draw_rect_gradient(userdata, radius, x, y, w, h,
+                            (cheese_gradient_t){color, color, color, color});
 }
 
 typedef struct {
@@ -1023,6 +1068,7 @@ cheese_renderer_t cheese_create_butter_renderer(butter_t *butter,
   cheese_renderer.update_texture_region = butter__update_texture_region;
 
   cheese_renderer.draw_rect = butter_draw_rect;
+  cheese_renderer.draw_rect_gradient = butter_draw_rect_gradient;
   cheese_renderer.draw_border = butter_draw_border;
   cheese_renderer.draw_texture = butter_draw_texture;
   cheese_renderer.draw_line = butter_draw_line;

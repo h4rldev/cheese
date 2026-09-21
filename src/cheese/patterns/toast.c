@@ -60,8 +60,8 @@ static void cheese_toast_overlay(cheese_t *cheese, void *userdata) {
                               null);
 
   cheese_color_t bg = style.bg_color ? style.bg_color : 0x1E1E1EFF;
-  cheese_draw_rect(cheese, style.corner_radius, ctx->x, ctx->y, ctx->w, ctx->h,
-                   cheese_toast_with_alpha(bg, ctx->alpha));
+  cheese_draw_bg(cheese, &style, ctx->x, ctx->y, ctx->w, ctx->h, bg, 0,
+                 ctx->alpha);
 
   cheese_semantics_emit(
       cheese, (cheese_semantics_t){.name = ctx->text}, CHEESE_ROLE_LABEL,

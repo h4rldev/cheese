@@ -50,8 +50,10 @@ static void cheese_dropdown_draw(cheese_t *cheese, void *userdata) {
   cheese_color_t hover =
       menu->style.hover_color ? menu->style.hover_color : 0x3B82F640;
 
-  cheese_draw_rect(cheese, menu->style.corner_radius, menu->x, menu->y, menu->w,
-                   panel_h, bg);
+  f32 panel_alpha =
+      cheese_style_get_prop_f32(&menu->style, cheese->core_props.opacity, 1.0f);
+  cheese_draw_bg(cheese, &menu->style, menu->x, menu->y, menu->w, panel_h, bg,
+                0, panel_alpha);
 
   cheese_draw_line(cheese, menu->x, menu->y, menu->x + menu->w, menu->y, 1.0f,
                    edge);

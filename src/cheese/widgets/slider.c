@@ -24,6 +24,8 @@ static u32 slider_prop_track_color;
 static u32 slider_prop_fill_color;
 static u32 slider_prop_thumb_color;
 static u32 slider_prop_thumb_radius;
+static u32 slider_prop_track_opacity;
+static u32 slider_prop_fill_opacity;
 
 static void cheese_slider_props(cheese_t *cheese) {
   if (slider_prop_thumb_color)
@@ -37,6 +39,10 @@ static void cheese_slider_props(cheese_t *cheese) {
       cheese_prop_register(cheese, "slider/thumb/color", CHEESE_PROP_COLOR);
   slider_prop_thumb_radius =
       cheese_prop_register(cheese, "slider/thumb/radius", CHEESE_PROP_F32);
+  slider_prop_track_opacity =
+      cheese_prop_register(cheese, "slider/track/opacity", CHEESE_PROP_F32);
+  slider_prop_fill_opacity =
+      cheese_prop_register(cheese, "slider/fill/opacity", CHEESE_PROP_F32);
 }
 
 //
@@ -141,16 +147,23 @@ f32 cheese_slider(cheese_t *cheese, const cstr *classes,
   cheese_color_t thumb =
       cheese_style_get_prop_color(&style, slider_prop_thumb_color, fill);
 
+  f32 whole =
+      cheese_style_get_prop_f32(&style, cheese->core_props.opacity, 1.0f);
+  f32 track_alpha =
+      cheese_style_get_prop_f32(&style, slider_prop_track_opacity, whole);
+  f32 fill_alpha =
+      cheese_style_get_prop_f32(&style, slider_prop_fill_opacity, whole);
+
   cheese_corners_t thumb_radius = style.corner_radius;
   f32 radius =
       cheese_style_get_prop_f32(&style, slider_prop_thumb_radius, -1.0f);
   if (radius >= 0.0f)
     thumb_radius = (cheese_corners_t){radius, radius, radius, radius};
 
-  cheese_draw_rect(cheese, style.corner_radius, x, y, w, h, track);
+  cheese_draw_bg(cheese, &style, x, y, w, h, track, 0, track_alpha);
 
   if (v > 0.0f)
-    cheese_draw_rect(cheese, style.corner_radius, x, y, w * v, h, fill);
+    cheese_draw_bg(cheese, &style, x, y, w * v, h, fill, 0, fill_alpha);
 
   f32 knob = h * 1.6f;
   cheese_draw_rect(cheese, thumb_radius, x + w * v - knob * 0.5f,

@@ -31,8 +31,11 @@ void cheese_image(cheese_t *cheese, const cstr *classes,
                         (cheese_rect_t){(i32)x, (i32)y, (u32)w, (u32)h});
 
   if (!texture.id || texture.width == 0 || texture.height == 0) {
-    if (style.bg_color)
-      cheese_draw_rect(cheese, style.corner_radius, x, y, w, h, style.bg_color);
+    if (style.bg_color) {
+      f32 alpha =
+          cheese_style_get_prop_f32(&style, cheese->core_props.opacity, 1.0f);
+      cheese_draw_bg(cheese, &style, x, y, w, h, style.bg_color, 0, alpha);
+    }
     return;
   }
 

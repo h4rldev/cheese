@@ -3,6 +3,7 @@
 #include <cheese/log.h>
 #include <cheese/types.h>
 
+#include <cheese/core/anim.h>
 #include <cheese/core/selection.h>
 #include <cheese/core/style.h>
 
@@ -10,6 +11,17 @@
 #include <cheese/render/font.h>
 
 /***********************************/
+
+/** @brief Scale a colour's alpha channel by @p alpha. */
+static cheese_color_t cheese_color_scale_alpha(cheese_color_t color,
+                                               f32 alpha) {
+  u32 a = (u32)((f32)((color >> 24) & 0xFF) * alpha + 0.5f);
+  return (color & 0x00FFFFFFu) | (a << 24);
+}
+
+//
+//
+//
 
 void cheese_flush_draws(cheese_t *cheese) {
   if (!cheese || !cheese->renderer || !cheese->renderer->flush_draws) {
@@ -31,6 +43,59 @@ void cheese_draw_rect(cheese_t *cheese, cheese_corners_t radius, f32 x, f32 y,
 
   cheese->renderer->draw_rect(cheese->renderer->userdata, radius, x, y, w, h,
                               color);
+}
+
+void cheese_draw_rect_gradient(cheese_t *cheese, cheese_corners_t radius, f32 x,
+                               f32 y, f32 w, f32 h, cheese_gradient_t colors) {
+  if (!cheese || !cheese->renderer) {
+    cheese_log_error("cheese_draw_rect_gradient: Invalid renderer");
+    return;
+  }
+
+  if (cheese->renderer->draw_rect_gradient) {
+    cheese->renderer->draw_rect_gradient(cheese->renderer->userdata, radius, x,
+                                         y, w, h, colors);
+    return;
+  }
+
+  if (cheese->renderer->draw_rect)
+    cheese->renderer->draw_rect(cheese->renderer->userdata, radius, x, y, w, h,
+                                colors.top_left);
+}
+
+void cheese_draw_bg(cheese_t *cheese, const cheese_style_t *style, f32 x, f32 y,
+                    f32 w, f32 h, cheese_color_t flat, u32 state, f32 alpha) {
+  if (!cheese || !style) {
+    cheese_log_error("cheese_draw_bg: Invalid parameters");
+    return;
+  }
+
+  cheese_gradient_t g = cheese_style_get_prop_gradient(
+      style, cheese->core_props.bg_gradient, (cheese_gradient_t){0});
+
+  if (!g.top_left && !g.top_right && !g.bottom_right && !g.bottom_left) {
+    cheese_draw_rect(cheese, style->corner_radius, x, y, w, h,
+                     cheese_color_scale_alpha(flat, alpha));
+    return;
+  }
+
+  f32 tint = cheese_style_state_layer_alpha(state);
+  if (tint > 0.0f && style->state_layer_color) {
+    g.top_left = cheese_color_lerp(g.top_left, style->state_layer_color, tint);
+    g.top_right =
+        cheese_color_lerp(g.top_right, style->state_layer_color, tint);
+    g.bottom_right =
+        cheese_color_lerp(g.bottom_right, style->state_layer_color, tint);
+    g.bottom_left =
+        cheese_color_lerp(g.bottom_left, style->state_layer_color, tint);
+  }
+
+  g.top_left = cheese_color_scale_alpha(g.top_left, alpha);
+  g.top_right = cheese_color_scale_alpha(g.top_right, alpha);
+  g.bottom_right = cheese_color_scale_alpha(g.bottom_right, alpha);
+  g.bottom_left = cheese_color_scale_alpha(g.bottom_left, alpha);
+
+  cheese_draw_rect_gradient(cheese, style->corner_radius, x, y, w, h, g);
 }
 
 void cheese_draw_border(cheese_t *cheese, const cheese_style_t *style, f32 x,

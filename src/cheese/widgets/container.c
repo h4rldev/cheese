@@ -43,7 +43,9 @@ void cheese_begin_container(cheese_t *cheese, const cstr *classes,
   f32 pad_top = cheese_style_get_pad_top(&style);
   f32 pad_right = cheese_style_get_pad_right(&style);
 
-  cheese_draw_rect(cheese, style.corner_radius, x, y, rw, rh, style.bg_color);
+  f32 alpha =
+      cheese_style_get_prop_f32(&style, cheese->core_props.opacity, 1.0f);
+  cheese_draw_bg(cheese, &style, x, y, rw, rh, style.bg_color, 0, alpha);
   cheese_draw_border(cheese, &style, x, y, rw, rh);
 
   f32 clip_x = x + pad_left - 1.0f;
@@ -126,7 +128,9 @@ void cheese_begin_scroll(cheese_t *cheese, const cstr *classes,
       (cheese_rect_t){(i32)x, (i32)y, (u32)rw, (u32)rh});
 
   cheese_push_scope(cheese, cheese_style_new(), classes);
-  cheese_draw_rect(cheese, style.corner_radius, x, y, rw, rh, style.bg_color);
+  f32 alpha =
+      cheese_style_get_prop_f32(&style, cheese->core_props.opacity, 1.0f);
+  cheese_draw_bg(cheese, &style, x, y, rw, rh, style.bg_color, 0, alpha);
   cheese_draw_border(cheese, &style, x, y, rw, rh);
 
   cheese_push_clip(cheese, x, y, rw, rh);

@@ -66,7 +66,9 @@ u32 cheese_button_ex(cheese_t *cheese, const cstr *classes,
   if (cheese_widget_activated(cheese, &scope))
     result |= CHEESE_BUTTON_CLICK_LEFT;
 
-  cheese_draw_rect(cheese, style.corner_radius, x, y, w, h, draw_bg);
+  f32 alpha =
+      cheese_style_get_prop_f32(&style, cheese->core_props.opacity, 1.0f);
+  cheese_draw_bg(cheese, &style, x, y, w, h, draw_bg, state, alpha);
   cheese_draw_border(cheese, &style, x, y, w, h);
 
   const cstr *label_cstr = cheese_value_str(label);

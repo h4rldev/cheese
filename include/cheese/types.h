@@ -38,6 +38,15 @@ typedef u32 cheese_color_t;
 //
 //
 
+/** @brief A linear (four-corner) colour field for a rectangle fill. */
+typedef struct {
+  cheese_color_t top_left, top_right, bottom_right, bottom_left;
+} cheese_gradient_t;
+
+//
+//
+//
+
 /** @brief Log severity. */
 typedef enum {
   CHEESE_LOG_DEBUG,
@@ -244,6 +253,8 @@ struct cheese_renderer {
   b32 sdf_text;
   void (*draw_rect)(void *userdata, cheese_corners_t radius, f32 x, f32 y,
                     f32 w, f32 h, cheese_color_t color);
+  void (*draw_rect_gradient)(void *userdata, cheese_corners_t radius, f32 x,
+                             f32 y, f32 w, f32 h, cheese_gradient_t colors);
   void (*draw_border)(void *userdata, cheese_corners_t radius, f32 x, f32 y,
                       f32 w, f32 h, f32 thickness, u32 sides,
                       cheese_color_t color);
@@ -856,6 +867,8 @@ typedef struct {
  * @param focus_ring_color `"focus_ring/color"` - focus indicator colour.
  * @param focus_ring_width `"focus_ring/width"` - indicator thickness.
  * @param focus_ring_offset `"focus_ring/offset"` - pixels outside the bounds.
+ * @param bg_gradient `"bg/gradient"` - colour gradient.
+ * @param opacity `"opacity"` - opacity of the background.
  */
 typedef struct {
   u32 border_color;
@@ -864,6 +877,8 @@ typedef struct {
   u32 focus_ring_color;
   u32 focus_ring_width;
   u32 focus_ring_offset;
+  u32 bg_gradient;
+  u32 opacity;
 } cheese_core_style_props_t;
 
 //

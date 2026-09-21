@@ -39,6 +39,8 @@
 #define CHEESE_PROP_FOCUS_RING_COLOR "focus_ring/color"
 #define CHEESE_PROP_FOCUS_RING_WIDTH "focus_ring/width"
 #define CHEESE_PROP_FOCUS_RING_OFFSET "focus_ring/offset"
+#define CHEESE_PROP_BG_GRADIENT "bg/gradient"
+#define CHEESE_PROP_OPACITY "opacity"
 
 //
 //
@@ -286,22 +288,6 @@ void cheese_style_set_prop(cheese_t *cheese, cheese_style_t *style, u32 prop,
 //
 
 /**
- * @brief Read a property from a resolved style.
- *
- * @param style The resolved style.
- * @param prop The property id.
- * @param out Filled with the value when present.
- *
- * @return true when the style carries @c prop.
- */
-b32 cheese_style_get_prop(const cheese_style_t *style, u32 prop,
-                          cheese_prop_t *out);
-
-//
-//
-//
-
-/**
  * @brief Write a colour property by interned id.
  * @details Replaces any existing value; see @ref cheese_style_set_prop for
  * allocation and kind semantics.
@@ -330,6 +316,56 @@ void cheese_style_set_prop_color(cheese_t *cheese, cheese_style_t *style,
  */
 void cheese_style_set_prop_f32(cheese_t *cheese, cheese_style_t *style,
                                u32 prop, f32 value);
+
+//
+//
+//
+
+/**
+ * @brief Write a u32 property by interned id.
+ * @details Replaces any existing value; see @ref cheese_style_set_prop for
+ * allocation and kind semantics.
+ *
+ * @param cheese The cheese context (for the arena).
+ * @param style The style to write.
+ * @param prop The interned property id.
+ * @param value The u32 to store.
+ */
+void cheese_style_set_prop_u32(cheese_t *cheese, cheese_style_t *style,
+                               u32 prop, u32 value);
+
+//
+//
+//
+
+/** @brief Write a gradient property by interned id.
+ * @details The @ref cheese_gradient_t is copied into the frame arena, so the
+ * caller may pass a stack value that goes out of scope; replaces any existing
+ * value. Stored as a @c CHEESE_PROP_PTR payload.
+ *
+ * @param cheese The cheese context (for the arena).
+ * @param style The style to write.
+ * @param prop The interned property id.
+ * @param gradient The four-corner gradient to copy.
+ */
+void cheese_style_set_prop_gradient(cheese_t *cheese, cheese_style_t *style,
+                                    u32 prop, cheese_gradient_t gradient);
+
+//
+//
+//
+
+/**
+ * @brief Read a property from a resolved style.
+ *
+ * @param style The resolved style.
+ * @param prop The property id.
+ * @param out Filled with the value when present.
+ *
+ * @return true when the style carries @c prop.
+ */
+b32 cheese_style_get_prop(const cheese_style_t *style, u32 prop,
+                          cheese_prop_t *out);
 
 //
 //
@@ -368,23 +404,6 @@ f32 cheese_style_get_prop_f32(const cheese_style_t *style, u32 prop,
 //
 
 /**
- * @brief Write a u32 property by interned id.
- * @details Replaces any existing value; see @ref cheese_style_set_prop for
- * allocation and kind semantics.
- *
- * @param cheese The cheese context (for the arena).
- * @param style The style to write.
- * @param prop The interned property id.
- * @param value The u32 to store.
- */
-void cheese_style_set_prop_u32(cheese_t *cheese, cheese_style_t *style,
-                               u32 prop, u32 value);
-
-//
-//
-//
-
-/**
  * @brief Read a u32 property, or @c fallback when absent.
  *
  * @param style The resolved style.
@@ -395,6 +414,23 @@ void cheese_style_set_prop_u32(cheese_t *cheese, cheese_style_t *style,
  */
 u32 cheese_style_get_prop_u32(const cheese_style_t *style, u32 prop,
                               u32 fallback);
+
+//
+//
+//
+
+/**
+ * @brief Read a gradient property, or @c fallback when absent.
+ *
+ * @param style The resolved style.
+ * @param prop The property id.
+ * @param fallback The value to return when @c prop is absent or mistyped.
+ *
+ * @return The gradient, or @c fallback.
+ */
+cheese_gradient_t cheese_style_get_prop_gradient(const cheese_style_t *style,
+                                                 u32 prop,
+                                                 cheese_gradient_t fallback);
 
 //
 //
@@ -476,6 +512,21 @@ void cheese_style_class_register(cheese_t *cheese, const cstr *name,
  */
 void cheese_style_apply_classes(cheese_t *cheese, cheese_style_t *style,
                                 const cstr *classes);
+
+//
+//
+//
+
+/**
+ * @brief The overlay alpha @ref cheese_style_apply_state uses for a state.
+ * @details 0.12 for disabled/pressed, 0.08 for hovered, 0.10 for focused, else
+ * `0`.
+ *
+ * @param state The interaction-state bits.
+ *
+ * @return The alpha to overlay `state_layer_color` onto the background.
+ */
+f32 cheese_style_state_layer_alpha(u32 state);
 
 //
 //
