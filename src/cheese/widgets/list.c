@@ -9,7 +9,8 @@
 #include <cheese/core/layout.h>
 #include <cheese/core/semantics.h>
 #include <cheese/core/state.h>
-#include <cheese/core/style.h>
+
+#include <cheese/style/resolve.h>
 
 #include <cheese/render/draw.h>
 #include <cheese/render/font.h>

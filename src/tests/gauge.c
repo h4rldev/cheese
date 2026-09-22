@@ -19,29 +19,29 @@ static u32 gauge_needle_color;
 
 static u32 gauge_prop_needle_angle(cheese_t *cheese) {
   if (!gauge_needle_angle)
-    gauge_needle_angle =
-        cheese_prop_register(cheese, "gauge/needle/angle", CHEESE_PROP_F32);
+    gauge_needle_angle = cheese_style_prop_register(
+        cheese, "gauge/needle/angle", CHEESE_PROP_F32);
   return gauge_needle_angle;
 }
 
 static u32 gauge_prop_needle_color(cheese_t *cheese) {
   if (!gauge_needle_color)
-    gauge_needle_color =
-        cheese_prop_register(cheese, "gauge/needle/color", CHEESE_PROP_COLOR);
+    gauge_needle_color = cheese_style_prop_register(
+        cheese, "gauge/needle/color", CHEESE_PROP_COLOR);
   return gauge_needle_color;
 }
 
 // Thin wrappers, so call sites read like named setters.
 static void gauge_style_set_needle_angle(cheese_t *cheese,
                                          cheese_style_t *style, f32 degrees) {
-  cheese_style_set_prop_f32(cheese, style, gauge_prop_needle_angle(cheese),
+  cheese_style_prop_set_f32(cheese, style, gauge_prop_needle_angle(cheese),
                             degrees);
 }
 
 static void gauge_style_set_needle_color(cheese_t *cheese,
                                          cheese_style_t *style,
                                          cheese_color_t color) {
-  cheese_style_set_prop_color(cheese, style, gauge_prop_needle_color(cheese),
+  cheese_style_prop_set_color(cheese, style, gauge_prop_needle_color(cheese),
                               color);
 }
 
@@ -52,11 +52,11 @@ static void cheese_gauge(cheese_t *cheese, const cstr *classes,
   cheese_style_resolve_scoped(cheese, &style, CHEESE_ROLE_NONE, classes, null);
 
   f32 angle =
-      cheese_style_get_prop_f32(&style, gauge_prop_needle_angle(cheese), -1.0f);
+      cheese_style_prop_get_f32(&style, gauge_prop_needle_angle(cheese), -1.0f);
   if (angle < 0.0f)
     angle = value * 360.0f;
 
-  cheese_color_t color = cheese_style_get_prop_color(
+  cheese_color_t color = cheese_style_prop_get_color(
       &style, gauge_prop_needle_color(cheese), style.text_color);
   if (color == 0)
     color = cheese_color_rgb(255, 255, 255);

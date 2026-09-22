@@ -10,7 +10,9 @@
 #include <cheese/core/layout.h>
 #include <cheese/core/semantics.h>
 #include <cheese/core/state.h>
-#include <cheese/core/style.h>
+
+#include <cheese/style/prop.h>
+#include <cheese/style/resolve.h>
 
 #include <cheese/render/draw.h>
 #include <cheese/render/font.h>
@@ -26,23 +28,26 @@ static u32 slider_prop_thumb_color;
 static u32 slider_prop_thumb_radius;
 static u32 slider_prop_track_opacity;
 static u32 slider_prop_fill_opacity;
+static u32 slider_prop_fill_gradient;
 
 static void cheese_slider_props(cheese_t *cheese) {
   if (slider_prop_thumb_color)
     return;
 
-  slider_prop_track_color =
-      cheese_prop_register(cheese, "slider/track/color", CHEESE_PROP_COLOR);
-  slider_prop_fill_color =
-      cheese_prop_register(cheese, "slider/fill/color", CHEESE_PROP_COLOR);
-  slider_prop_thumb_color =
-      cheese_prop_register(cheese, "slider/thumb/color", CHEESE_PROP_COLOR);
-  slider_prop_thumb_radius =
-      cheese_prop_register(cheese, "slider/thumb/radius", CHEESE_PROP_F32);
-  slider_prop_track_opacity =
-      cheese_prop_register(cheese, "slider/track/opacity", CHEESE_PROP_F32);
-  slider_prop_fill_opacity =
-      cheese_prop_register(cheese, "slider/fill/opacity", CHEESE_PROP_F32);
+  slider_prop_track_color = cheese_style_prop_register(
+      cheese, "slider/track/color", CHEESE_PROP_COLOR);
+  slider_prop_fill_color = cheese_style_prop_register(
+      cheese, "slider/fill/color", CHEESE_PROP_COLOR);
+  slider_prop_thumb_color = cheese_style_prop_register(
+      cheese, "slider/thumb/color", CHEESE_PROP_COLOR);
+  slider_prop_thumb_radius = cheese_style_prop_register(
+      cheese, "slider/thumb/radius", CHEESE_PROP_F32);
+  slider_prop_track_opacity = cheese_style_prop_register(
+      cheese, "slider/track/opacity", CHEESE_PROP_F32);
+  slider_prop_fill_opacity = cheese_style_prop_register(
+      cheese, "slider/fill/opacity", CHEESE_PROP_F32);
+  slider_prop_fill_gradient = cheese_style_prop_register(
+      cheese, "slider/fill/gradient", CHEESE_PROP_PTR);
 }
 
 //
@@ -134,36 +139,37 @@ f32 cheese_slider(cheese_t *cheese, const cstr *classes,
 
   cheese_slider_props(cheese);
 
-  cheese_color_t track = cheese_style_get_prop_color(
+  cheese_color_t track = cheese_style_prop_get_color(
       &style, slider_prop_track_color, style.bg_color);
   if (track == 0)
     track = cheese_color_rgba(40, 40, 40, 255);
 
-  cheese_color_t fill = cheese_style_get_prop_color(
+  cheese_color_t fill = cheese_style_prop_get_color(
       &style, slider_prop_fill_color, style.text_color);
   if (fill == 0)
     fill = cheese_color_rgba(255, 255, 255, 255);
 
   cheese_color_t thumb =
-      cheese_style_get_prop_color(&style, slider_prop_thumb_color, fill);
+      cheese_style_prop_get_color(&style, slider_prop_thumb_color, fill);
 
   f32 whole =
-      cheese_style_get_prop_f32(&style, cheese->core_props.opacity, 1.0f);
+      cheese_style_prop_get_f32(&style, cheese->core_props.opacity, 1.0f);
   f32 track_alpha =
-      cheese_style_get_prop_f32(&style, slider_prop_track_opacity, whole);
+      cheese_style_prop_get_f32(&style, slider_prop_track_opacity, whole);
   f32 fill_alpha =
-      cheese_style_get_prop_f32(&style, slider_prop_fill_opacity, whole);
+      cheese_style_prop_get_f32(&style, slider_prop_fill_opacity, whole);
 
   cheese_corners_t thumb_radius = style.corner_radius;
   f32 radius =
-      cheese_style_get_prop_f32(&style, slider_prop_thumb_radius, -1.0f);
+      cheese_style_prop_get_f32(&style, slider_prop_thumb_radius, -1.0f);
   if (radius >= 0.0f)
     thumb_radius = (cheese_corners_t){radius, radius, radius, radius};
 
   cheese_draw_bg(cheese, &style, x, y, w, h, track, 0, track_alpha);
 
   if (v > 0.0f)
-    cheese_draw_bg(cheese, &style, x, y, w * v, h, fill, 0, fill_alpha);
+    cheese_draw_fill(cheese, &style, x, y, w * v, h, fill,
+                     slider_prop_fill_gradient, 0, fill_alpha);
 
   f32 knob = h * 1.6f;
   cheese_draw_rect(cheese, thumb_radius, x + w * v - knob * 0.5f,
@@ -183,4 +189,14 @@ f32 cheese_slider_auto(cheese_t *cheese, const cstr *classes,
   cheese_layout_place(cheese, &w, &h, &x, &y);
 
   return cheese_slider(cheese, classes, semantics, x, y, w, h, value);
+}
+
+void cheese_slider_set_fill_gradient(cheese_t *cheese, cheese_style_t *style,
+                                     cheese_gradient_t gradient) {
+  if (!cheese || !style)
+    return;
+
+  cheese_slider_props(cheese);
+  cheese_style_prop_set_gradient(cheese, style, slider_prop_fill_gradient,
+                                 gradient);
 }

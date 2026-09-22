@@ -86,8 +86,12 @@ u32 cheese_text_line_of(const cheese_text_line_t *lines, u32 count, u32 byte);
 /**
  * @brief Map a local x position to the nearest byte offset in a line.
  * @details Walks the codepoints of `s[start..end]`, comparing @c local against
- * the midpoint between each codepoint's prefix width.
+ * the midpoint between each codepoint's prefix width. The line is shaped once
+ * and its cumulative advances are read, so the cost is linear in the line
+ * length.
  *
+ * @param cheese The cheese context (its frame arena holds the temporary
+ * cumulative-width array.)
  * @param font Font used for measuring.
  * @param s Source string.
  * @param start First byte of the line.
@@ -96,7 +100,7 @@ u32 cheese_text_line_of(const cheese_text_line_t *lines, u32 count, u32 byte);
  *
  * @return The byte offset of the nearest caret position.
  */
-u32 cheese_text_caret_from_x(cheese_font_t *font, const cstr *s, u32 start,
-                             u32 end, f32 local);
+u32 cheese_text_caret_from_x(cheese_t *cheese, cheese_font_t *font,
+                             const cstr *s, u32 start, u32 end, f32 local);
 
 #endif // !CHEESE_RENDER_TEXT_H

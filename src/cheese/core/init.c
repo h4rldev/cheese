@@ -1,8 +1,9 @@
 /***********************************/
 
-#include <string.h>
+#include <math.h>
 
 #include <htils/arena.h>
+#include <htils/basictypes.h>
 
 #include <cheese/types.h>
 
@@ -13,8 +14,10 @@
 #include <cheese/core/selection.h>
 #include <cheese/core/semantics.h>
 #include <cheese/core/state.h>
-#include <cheese/core/style.h>
-#include <cheese/core/theme.h>
+
+#include <cheese/style/prop.h>
+#include <cheese/style/theme.h>
+#include <cheese/style/value.h>
 
 #include <cheese/render/draw.h>
 #include <cheese/render/font.h>
@@ -62,7 +65,7 @@ cheese_t cheese_default(arena_t *persistent) {
   cheese.scope_depth = 1;
   cheese.arena = persistent;
   cheese.prop_next = 1;
-  cheese_style_register_core_props(&cheese);
+  cheese_style_prop_register_core(&cheese);
   cheese.store = cheese_state_store_new(persistent);
   cheese.arrow_nav = true;
   cheese.cursor_last = -1;
@@ -75,7 +78,13 @@ void cheese_input(cheese_t *cheese, cheese_input_t input) {
     return;
 
   b32 changed = !cheese->input_seen ||
-                memcmp(&cheese->last_input, &input, sizeof(input)) != 0;
+                input.mouse_buttons != cheese->last_input.mouse_buttons ||
+                input.key_mods != cheese->last_input.key_mods ||
+                input.key_event_count != cheese->last_input.key_event_count ||
+                fabsf(input.mouse_x - cheese->last_input.mouse_x) > 0.5f ||
+                fabsf(input.mouse_y - cheese->last_input.mouse_y) > 0.5f ||
+                fabsf(input.scroll_x - cheese->last_input.scroll_x) > 0.001f ||
+                fabsf(input.scroll_y - cheese->last_input.scroll_y) > 0.001f;
 
   cheese->last_input = input;
   cheese->input_seen = true;

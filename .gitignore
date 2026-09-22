@@ -30,6 +30,10 @@ popup
 slider
 tabs
 text
+text_wrap
+text_long
+text_page
+text_scroll
 radio
 list
 dropdown
@@ -37,17 +41,20 @@ widget
 toast
 snapshot
 nav
-raylib
 scrollbar
-text_wrap
 gauge
 scoped
-sdl2
-sdl3
 cursor
 selectable
 selection
 clipboard
+gradient
 
 butter-x11
 butter-wayland
+sdl2
+sdl3
+raylib
+
+!/src/cheese/style
+!/include/cheese/style

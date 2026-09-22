@@ -83,6 +83,18 @@ project {
           src "src/tests/text_wrap.c"
         }
 
+        text_long {
+          src "src/tests/text_long.c"
+        }
+
+        text_scroll {
+          src "src/tests/text_scroll.c"
+        }
+
+        text_page {
+          src "src/tests/text_page.c"
+        }
+
         dropdown {
           src "src/tests/dropdown.c"
         }
@@ -146,6 +158,12 @@ project {
         selection {
           src "src/tests/selection.c"
         }
+
+        gradient {
+          src "src/tests/gradient.c"
+        }
+
+
       }
     }
 
@@ -167,7 +185,7 @@ project {
       tests {
         butter-wayland {
           src "examples/butter.c" "renderers/butter.c"
-          ld_flags -lbutter-wayland -lbread-wayland -lwayland-client -lwayland-cursor -lxkbcommon -lvulkan -ldl
+          ld_flags -lbutter-wayland-debug -lbread-wayland -lwayland-client -lwayland-cursor -lxkbcommon -lvulkan -ldl
         }
       }
     }

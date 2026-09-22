@@ -16,16 +16,7 @@
 #include <butter/texture.h>
 #include <butter/types.h>
 
-#include <cheese/debug.h>
-#include <cheese/log.h>
-#include <cheese/types.h>
-
-#include <cheese/core/app.h>
-#include <cheese/core/init.h>
-#include <cheese/core/state.h>
-#include <cheese/core/theme.h>
-
-#include <cheese/render/font.h>
+#include <cheese.h>
 
 #include <renderers/butter.h>
 
@@ -57,9 +48,15 @@ typedef struct {
   atomic_i32 cursor_request;
   i32 cursor_applied;
 
+  f32 window_w, window_h;
+
+  f32 pending_w, pending_h;
+  b32 resize_dirty;
+
   f64 last_cpu_s;
   f64 last_wall_s;
   f64 last_metrics_s;
+  f64 last_frame_request_s;
   cheese_debug_metrics_t metrics;
 
   cheese_key_event_t key_events[CHEESE_MAX_KEY_EVENTS];
@@ -147,11 +144,11 @@ static cheese_key_t cheese_key_from_bread(bread_key_t key) {
 //
 
 static void push_key_event(app_state_t *state, cheese_key_t key, u32 codepoint,
-                           u32 mods) {
+                           u32 mods, b32 repeat) {
   if (state->key_event_count >= CHEESE_MAX_KEY_EVENTS)
     return;
   state->key_events[state->key_event_count++] =
-      (cheese_key_event_t){key, codepoint, mods, false};
+      (cheese_key_event_t){key, codepoint, mods, repeat};
 }
 
 //
@@ -172,15 +169,17 @@ static void event_callback(bread_event_t *event, void *userdata) {
     else if (bk == BREAD_KEY_LEFT_SUPER || bk == BREAD_KEY_RIGHT_SUPER)
       state->key_mods |= CHEESE_MOD_SUPER;
 
+    b32 repeat = event->data.key.repeat;
+
     cheese_key_t ck = cheese_key_from_bread(bk);
     u32 cp = bread_event_key_to_unicode(state->window, event);
     if (ck == CHEESE_KEY_SPACE)
-      push_key_event(state, ck, ' ', state->key_mods);
+      push_key_event(state, ck, ' ', state->key_mods, repeat);
     else if (ck != CHEESE_KEY_UNKNOWN)
-      push_key_event(state, ck, 0, state->key_mods);
+      push_key_event(state, ck, 0, state->key_mods, repeat);
 
     if (cp && cp != ' ' && cp >= 32 && cp != 127)
-      push_key_event(state, CHEESE_KEY_UNKNOWN, cp, state->key_mods);
+      push_key_event(state, CHEESE_KEY_UNKNOWN, cp, state->key_mods, repeat);
   } break;
 
   case BREAD_EVENT_KEY_RELEASE: {
@@ -242,8 +241,9 @@ static void event_callback(bread_event_t *event, void *userdata) {
     break;
 
   case BREAD_EVENT_WINDOW_RESIZE:
-    butter_set_pending_resize(state->butter, event->data.resize.width,
-                              event->data.resize.height);
+    state->pending_w = event->data.resize.width;
+    state->pending_h = event->data.resize.height;
+    state->resize_dirty = true;
     break;
 
   default:
@@ -270,6 +270,24 @@ static cheese_input_t build_input(app_state_t *state) {
   input.key_event_count = state->key_event_count;
 
   return input;
+}
+
+//
+//
+//
+
+static const cstr *clipboard_get_cb(void *userdata) {
+  app_state_t *state = (app_state_t *)userdata;
+  return bread_clipboard_get(state->window);
+}
+
+//
+//
+//
+
+static void clipboard_set_cb(void *userdata, const cstr *text) {
+  app_state_t *state = (app_state_t *)userdata;
+  bread_clipboard_set(state->window, text);
 }
 
 //
@@ -346,6 +364,8 @@ static void gather_metrics(app_state_t *state, cheese_debug_metrics_t *m) {
     m->gpu_pct = stats.gpu_usage_pct;
     m->vram_used_mib = (f32)stats.vram_used / (1024.0f * 1024.0f);
     m->vram_total_mib = (f32)stats.vram_total / (1024.0f * 1024.0f);
+    m->vram_budget_mib = (f32)stats.vram_budget / (1024.0f * 1024.0f);
+    m->memory_budget_valid = stats.memory_budget_valid;
   }
 }
 
@@ -364,9 +384,13 @@ static void app_render(cheese_t *cheese, void *userdata) {
   f64 now_s = (f64)now.tv_sec + (f64)now.tv_nsec / 1e9;
   if (now_s - state->last_metrics_s >= 0.2) {
     state->last_metrics_s = now_s;
+    cheese_log_info("AA samples=%u", butter_get_aa_samples(state->butter));
     gather_metrics(state, &state->metrics);
   }
-  cheese_debug_monitor(cheese, state->font, .0f, 8.0f, &state->metrics);
+
+  cheese_debug_monitor(cheese, state->font, 0.0f, 0.0f, state->window_w,
+                       state->window_h, CHEESE_ALIGN_END, CHEESE_ALIGN_START,
+                       8.0f, &state->metrics);
 }
 
 //
@@ -390,6 +414,8 @@ static void render_callback(vk_command_buffer_t cmd,
   cheese_input_t input = build_input(state);
   input.window_w = (f32)frame->extent.width;
   input.window_h = (f32)frame->extent.height;
+  state->window_w = (f32)frame->extent.width;
+  state->window_h = (f32)frame->extent.height;
 
   state->key_event_count = 0;
   state->scroll_h = 0.0f;
@@ -503,6 +529,7 @@ int main(void) {
   cheese_theme_apply(&cheese, &theme);
 
   app_state_t state = {0};
+  state.last_frame_request_s = 0.0;
   state.cheese = cheese;
   state.window = &window;
   state.butter = butter;
@@ -518,6 +545,8 @@ int main(void) {
       .stop = app_stop,
   };
 
+  cheese_set_clipboard(&state.cheese, clipboard_get_cb, clipboard_set_cb,
+                       &state);
   cheese_set_cursor_callback(&state.cheese, cursor_callback, &state);
   butter_set_draw_callback(butter, render_callback, &state);
   bread_window_set_event_callback(&window, event_callback, &state);
@@ -529,13 +558,19 @@ int main(void) {
 
   butter_start_render_thread(butter, frame_arena);
 
-  struct timespec last;
-  clock_gettime(CLOCK_MONOTONIC, &last);
-
   b32 frame_in_flight = false;
+  struct timespec boot_clock;
+  clock_gettime(CLOCK_MONOTONIC, &boot_clock);
+  f64 last_s = (f64)boot_clock.tv_sec + (f64)boot_clock.tv_nsec / 1000000000.0;
 
   while (!bread_window_should_close(&window)) {
     bread_window_poll(&window);
+
+    if (state.resize_dirty) {
+      butter_set_pending_resize(state.butter, state.pending_w, state.pending_h);
+      state.resize_dirty = false;
+      cheese_request_frame(&state.cheese);
+    }
 
     i32 want_cursor = atomic_load(&state.cursor_request);
     if (want_cursor != state.cursor_applied) {
@@ -543,11 +578,11 @@ int main(void) {
       bread_set_cursor(&window, (bread_cursor_type_t)want_cursor);
     }
 
-    struct timespec now;
-    clock_gettime(CLOCK_MONOTONIC, &now);
-    state.delta_time = (f32)(now.tv_sec - last.tv_sec) +
-                       (f32)(now.tv_nsec - last.tv_nsec) / 1000000000.0f;
-    last = now;
+    struct timespec clock_now;
+    clock_gettime(CLOCK_MONOTONIC, &clock_now);
+    f64 now_s = (f64)clock_now.tv_sec + (f64)clock_now.tv_nsec / 1000000000.0;
+    state.delta_time = (f32)(now_s - last_s);
+    last_s = now_s;
 
     cheese_app_update(&state.cheese, &state.app, state.delta_time);
 
@@ -567,7 +602,10 @@ int main(void) {
       frame_in_flight = true;
     }
 
-    thrd_sleep(&(struct timespec){.tv_nsec = 1000000}, NULL);
+    if (frame_in_flight)
+      butter_wait_for_frame(butter);
+    else
+      bread_window_wait_events(&window, 16);
   }
 
   cheese_app_stop(&state.cheese, &state.app);

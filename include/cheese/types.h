@@ -566,12 +566,38 @@ typedef struct {
 //
 //
 
+/**
+ * @brief A memoized shaping of one text/variant/scale triple: cumulative
+ * widths and the HarfBuzz glyph run.
+ */
+typedef struct {
+  u64 hash; /**< FNV-1a of the shaped bytes plus the variant and scale. */
+  u32 len;  /**< Shaped text length, in bytes. */
+  cheese_font_size_variant_t *variant; /**< Variant the run was shaped with. */
+  f32 scale;                           /**< font->scale at shape time. */
+  u8 *bytes;   /**< Copy of the shaped text, for the collision check. */
+  f32 *widths; /**< text->len + 1 cumulative byte-boundary widths. */
+  hb_glyph_info_t *info;    /**< Shaped glyph info, glyph_count entries. */
+  hb_glyph_position_t *pos; /**< Shaped glyph positions, glyph_count entries. */
+  u32 glyph_count;          /**< Number of shaped glyphs in @c info / @c pos. */
+} cheese_font_width_entry_t;
+
+//
+//
+//
+
 /** @brief A loaded font: its face, metrics and size variants. */
 struct cheese_font {
   ft_face_t ft_face;
   arena_t *arena;
   arena_t *scratch;
+  arena_t *shape_arena;
   cheese_renderer_t *renderer;
+
+  cheese_font_width_entry_t *width_cache;
+  u32 width_cache_count;
+  u32 width_cache_next;
+  u64 width_cache_bytes;
 
   u32 notdef_glyph_id;
   u32 default_size;
@@ -1016,11 +1042,10 @@ typedef struct {
 /**
  * @brief One undo snapshot of a text input.
  *
- * @details Stored by @ref cheese_text_edit in the caller-owned
- *          @ref cheese_text_input_t.undo_arena, so the text outlives the frame
- *          it was recorded in. An entry's presence is its value; the ring is
- *          bounded by @ref CHEESE_TEXT_UNDO_MAX and @ref
- * CHEESE_TEXT_UNDO_BYTES.
+ * @details Stored by @ref cheese_text_edit in the caller-owned @ref
+ * cheese_text_input_t.undo_arena, so the text outlives the frame it was
+ * recorded in. An entry's presence is its value; the ring is bounded by @ref
+ * CHEESE_TEXT_UNDO_MAX and @ref CHEESE_TEXT_UNDO_BYTES.
  *
  * @param text Borrowed pointer to the snapshot text in the undo arena.
  * @param len Snapshot length in bytes.
@@ -1040,9 +1065,10 @@ typedef struct {
 
 /** @brief Persistent editing state of a text input (caller-owned). */
 typedef struct {
-  i32 caret;    // caret position, in codepoints
-  i32 anchor;   // selection anchor, in codepoints (== caret when none)
-  f32 scroll_x; // horizontal scroll offset, in pixels
+  i32 caret;      // caret position, in codepoints
+  i32 anchor;     // selection anchor, in codepoints (== caret when none)
+  f32 scroll_x;   // horizontal scroll offset, in pixels
+  i32 last_caret; // caret the viewport last followed (internal
 
   f32 content_h;  // out: the wrapped text height, in pixels
   f32 viewport_h; // out: the field's inner (clip) height, in pixels

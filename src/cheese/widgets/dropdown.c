@@ -11,7 +11,10 @@
 #include <cheese/core/overlay.h>
 #include <cheese/core/semantics.h>
 #include <cheese/core/state.h>
-#include <cheese/core/style.h>
+
+#include <cheese/style/prop.h>
+#include <cheese/style/resolve.h>
+#include <cheese/style/value.h>
 
 #include <cheese/render/draw.h>
 #include <cheese/render/font.h>
@@ -43,7 +46,7 @@ static void cheese_dropdown_draw(cheese_t *cheese, void *userdata) {
   f32 panel_h = menu->pad * 2.0f + (f32)menu->count * menu->row_h;
 
   cheese_color_t bg = menu->style.bg_color ? menu->style.bg_color : 0xFFFFFFFF;
-  cheese_color_t edge = cheese_style_get_prop_color(
+  cheese_color_t edge = cheese_style_prop_get_color(
       &menu->style, cheese->core_props.border_color, 0x000000FF);
   cheese_color_t text =
       menu->style.text_color ? menu->style.text_color : 0x000000FF;
@@ -51,9 +54,9 @@ static void cheese_dropdown_draw(cheese_t *cheese, void *userdata) {
       menu->style.hover_color ? menu->style.hover_color : 0x3B82F640;
 
   f32 panel_alpha =
-      cheese_style_get_prop_f32(&menu->style, cheese->core_props.opacity, 1.0f);
+      cheese_style_prop_get_f32(&menu->style, cheese->core_props.opacity, 1.0f);
   cheese_draw_bg(cheese, &menu->style, menu->x, menu->y, menu->w, panel_h, bg,
-                0, panel_alpha);
+                 0, panel_alpha);
 
   cheese_draw_line(cheese, menu->x, menu->y, menu->x + menu->w, menu->y, 1.0f,
                    edge);

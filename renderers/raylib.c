@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include <raylib.h>
+#include <rlgl.h>
 
 #include <htils/arena.h>
 #include <htils/basictypes.h>
@@ -16,6 +17,8 @@
 #include <renderers/raylib.h>
 
 /***********************************/
+
+#define raylib_RECT_SEG 10
 
 typedef struct {
   i32 id;
@@ -41,6 +44,46 @@ static Color raylib_color(cheese_color_t color) {
       .b = (u8)((color >> 0) & 0xFF),
       .a = (u8)((color >> 24) & 0xFF),
   };
+}
+
+// Bilinearly samples the four-corner gradient at a screen-space point.
+static Color raylib_gradient_at(f32 px, f32 py, f32 x, f32 y, f32 w, f32 h,
+                                cheese_gradient_t g) {
+  f32 u = w > 0.0f ? (px - x) / w : 0.0f;
+  f32 v = h > 0.0f ? (py - y) / h : 0.0f;
+
+  f32 w00 = (1.0f - u) * (1.0f - v);
+  f32 w10 = u * (1.0f - v);
+  f32 w01 = (1.0f - u) * v;
+  f32 w11 = u * v;
+
+  f32 r = w00 * (f32)((g.top_left >> 16) & 0xFF) +
+          w10 * (f32)((g.top_right >> 16) & 0xFF) +
+          w01 * (f32)((g.bottom_left >> 16) & 0xFF) +
+          w11 * (f32)((g.bottom_right >> 16) & 0xFF);
+  f32 gg = w00 * (f32)((g.top_left >> 8) & 0xFF) +
+           w10 * (f32)((g.top_right >> 8) & 0xFF) +
+           w01 * (f32)((g.bottom_left >> 8) & 0xFF) +
+           w11 * (f32)((g.bottom_right >> 8) & 0xFF);
+  f32 b = w00 * (f32)(g.top_left & 0xFF) + w10 * (f32)(g.top_right & 0xFF) +
+          w01 * (f32)(g.bottom_left & 0xFF) +
+          w11 * (f32)(g.bottom_right & 0xFF);
+  f32 a = w00 * (f32)((g.top_left >> 24) & 0xFF) +
+          w10 * (f32)((g.top_right >> 24) & 0xFF) +
+          w01 * (f32)((g.bottom_left >> 24) & 0xFF) +
+          w11 * (f32)((g.bottom_right >> 24) & 0xFF);
+
+  return (Color){
+      .r = (u8)(r + 0.5f),
+      .g = (u8)(gg + 0.5f),
+      .b = (u8)(b + 0.5f),
+      .a = (u8)(a + 0.5f),
+  };
+}
+
+static void raylib_vtx(f32 x, f32 y, Color c) {
+  rlColor4ub(c.r, c.g, c.b, c.a);
+  rlVertex2f(x, y);
 }
 
 static raylib_texture_t *raylib_find_texture(raylib_renderer_t *renderer,
@@ -79,8 +122,9 @@ static void raylib_emit_glyph(void *userdata, const cheese_glyph_quad_t *quad) {
 //
 //
 
-static void raylib_draw_rect(void *userdata, cheese_corners_t radius, f32 x,
-                             f32 y, f32 w, f32 h, cheese_color_t color) {
+static void raylib_draw_rect_gradient(void *userdata, cheese_corners_t radius,
+                                      f32 x, f32 y, f32 w, f32 h,
+                                      cheese_gradient_t colors) {
   (void)userdata;
   if (w <= 0.0f || h <= 0.0f)
     return;
@@ -92,18 +136,62 @@ static void raylib_draw_rect(void *userdata, cheese_corners_t radius, f32 x,
   f32 r = (tl + tr + br + bl) * 0.25f;
 
   if (r <= 0.0f) {
-    DrawRectangleRec((Rectangle){x, y, w, h}, raylib_color(color));
+    Color ctl = raylib_color(colors.top_left);
+    Color ctr = raylib_color(colors.top_right);
+    Color cbl = raylib_color(colors.bottom_left);
+    Color cbr = raylib_color(colors.bottom_right);
+    rlBegin(RL_TRIANGLES);
+    raylib_vtx(x, y, ctl);
+    raylib_vtx(x + w, y, ctr);
+    raylib_vtx(x + w, y + h, cbr);
+    raylib_vtx(x, y, ctl);
+    raylib_vtx(x + w, y + h, cbr);
+    raylib_vtx(x, y + h, cbl);
+    rlEnd();
     return;
   }
 
-  f32 half = (w < h ? w : h) * 0.5f;
-  f32 roundness = half > 0.0f ? r / half : 0.0f;
-  if (roundness > 1.0f)
-    roundness = 1.0f;
-  DrawRectangleRounded((Rectangle){x, y, w, h}, roundness, 8,
-                       raylib_color(color));
+  f32 ccx[4] = {x + tl, x + w - tr, x + w - br, x + bl};
+  f32 ccy[4] = {y + tl, y + tr, y + h - br, y + h - bl};
+  f32 ccr[4] = {tl, tr, br, bl};
+  f32 ca0[4] = {(f32)M_PI, 1.5f * (f32)M_PI, 0.0f, 0.5f * (f32)M_PI};
+  f32 ca1[4] = {1.5f * (f32)M_PI, 2.0f * (f32)M_PI, 0.5f * (f32)M_PI,
+                (f32)M_PI};
+
+  f32 cx = x + w * 0.5f;
+  f32 cy = y + h * 0.5f;
+  Color cc = raylib_gradient_at(cx, cy, x, y, w, h, colors);
+
+  rlBegin(RL_TRIANGLES);
+  for (u32 k = 0; k < 4; k++) {
+    if (ccr[k] <= 0.0f) {
+      Color ck = raylib_gradient_at(ccx[k], ccy[k], x, y, w, h, colors);
+      raylib_vtx(cx, cy, cc);
+      raylib_vtx(ccx[k], ccy[k], ck);
+      raylib_vtx(ccx[k], ccy[k], ck);
+      continue;
+    }
+    for (u32 i = 0; i < raylib_RECT_SEG; i++) {
+      f32 t0 = ca0[k] + (f32)i / (f32)raylib_RECT_SEG * (ca1[k] - ca0[k]);
+      f32 t1 = ca0[k] + (f32)(i + 1) / (f32)raylib_RECT_SEG * (ca1[k] - ca0[k]);
+      f32 ax = ccx[k] + ccr[k] * cosf(t0);
+      f32 ay = ccy[k] + ccr[k] * sinf(t0);
+      f32 bx = ccx[k] + ccr[k] * cosf(t1);
+      f32 by = ccy[k] + ccr[k] * sinf(t1);
+      raylib_vtx(cx, cy, cc);
+      raylib_vtx(ax, ay, raylib_gradient_at(ax, ay, x, y, w, h, colors));
+      raylib_vtx(bx, by, raylib_gradient_at(bx, by, x, y, w, h, colors));
+    }
+  }
+  rlEnd();
 }
 
+// Flat-colour rect: delegates with four equal corner colours.
+static void raylib_draw_rect(void *userdata, cheese_corners_t radius, f32 x,
+                             f32 y, f32 w, f32 h, cheese_color_t color) {
+  raylib_draw_rect_gradient(userdata, radius, x, y, w, h,
+                            (cheese_gradient_t){color, color, color, color});
+}
 //
 //
 //
@@ -383,6 +471,7 @@ cheese_renderer_t cheese_create_raylib_renderer(arena_t *arena) {
   result.sdf_text = false;
 
   result.draw_rect = raylib_draw_rect;
+  result.draw_rect_gradient = raylib_draw_rect_gradient;
   result.draw_border = raylib_draw_border;
   result.draw_texture = raylib_draw_texture;
   result.draw_line = raylib_draw_line;

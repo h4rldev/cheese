@@ -12,7 +12,9 @@
 
 #include <cheese/core/init.h>
 #include <cheese/core/selection.h>
-#include <cheese/core/style.h>
+
+#include <cheese/style/resolve.h>
+#include <cheese/style/value.h>
 
 #include <cheese/render/draw.h>
 #include <cheese/render/font.h>

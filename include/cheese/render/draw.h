@@ -74,6 +74,32 @@ void cheese_draw_bg(cheese_t *cheese, const cheese_style_t *style, f32 x, f32 y,
 //
 
 /**
+ * @brief Fill a rect from a specific part's gradient property.
+ * @details Like @ref cheese_draw_bg, but reads the gradient from
+ * @p gradient_prop rather than the core `"bg/gradient"` and draws @p flat when
+ * that property is absent, so a two-part widget's foreground (a progress fill,
+ * a slider fill, a selected tab) never inherits the background gradient. Pass
+ * the widget's own `"<widget>/<part>/gradient"` id, or `0` for a plain flat
+ * fill. The `state_layer_color` tint is applied to the gradient corners at the
+ * alpha for @p state, as in @ref cheese_draw_bg.
+ *
+ * @param cheese The cheese context.
+ * @param style The resolved style.
+ * @param x,y,w,h The rect.
+ * @param flat The fill colour when @p gradient_prop is unset.
+ * @param gradient_prop The part's gradient property id, or `0`.
+ * @param state The interaction-state bits, for the state-layer tint.
+ * @param alpha Multiply the resolved opacity by this.
+ */
+void cheese_draw_fill(cheese_t *cheese, const cheese_style_t *style, f32 x,
+                      f32 y, f32 w, f32 h, cheese_color_t flat,
+                      u32 gradient_prop, u32 state, f32 alpha);
+
+//
+//
+//
+
+/**
  * @brief Draw a widget's border ring from its resolved style.
  * @details One draw: a rounded-rect ring whose thickness, sides and colour come
  * from the `"border/width"`, `"border/sides"` and `"border/color"` properties

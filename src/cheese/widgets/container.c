@@ -8,7 +8,10 @@
 #include <cheese/core/layout.h>
 #include <cheese/core/semantics.h>
 #include <cheese/core/state.h>
-#include <cheese/core/style.h>
+
+#include <cheese/style/prop.h>
+#include <cheese/style/resolve.h>
+#include <cheese/style/value.h>
 
 #include <cheese/render/draw.h>
 
@@ -44,7 +47,7 @@ void cheese_begin_container(cheese_t *cheese, const cstr *classes,
   f32 pad_right = cheese_style_get_pad_right(&style);
 
   f32 alpha =
-      cheese_style_get_prop_f32(&style, cheese->core_props.opacity, 1.0f);
+      cheese_style_prop_get_f32(&style, cheese->core_props.opacity, 1.0f);
   cheese_draw_bg(cheese, &style, x, y, rw, rh, style.bg_color, 0, alpha);
   cheese_draw_border(cheese, &style, x, y, rw, rh);
 
@@ -129,7 +132,7 @@ void cheese_begin_scroll(cheese_t *cheese, const cstr *classes,
 
   cheese_push_scope(cheese, cheese_style_new(), classes);
   f32 alpha =
-      cheese_style_get_prop_f32(&style, cheese->core_props.opacity, 1.0f);
+      cheese_style_prop_get_f32(&style, cheese->core_props.opacity, 1.0f);
   cheese_draw_bg(cheese, &style, x, y, rw, rh, style.bg_color, 0, alpha);
   cheese_draw_border(cheese, &style, x, y, rw, rh);
 

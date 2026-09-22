@@ -45,4 +45,22 @@ f32 cheese_slider(cheese_t *cheese, const cstr *classes,
 f32 cheese_slider_auto(cheese_t *cheese, const cstr *classes,
                        cheese_semantics_t semantics, cheese_value_t value);
 
+//
+//
+//
+
+/**
+ * @brief Set the slider fill's gradient.
+ * @details Sets the widget-owned `"slider/fill/gradient"` property on
+ * @p style; the filled portion draws it instead of its flat colour. The track
+ * keeps the core `"bg/gradient"`, so a background gradient never colours the
+ * fill. The gradient spans the fill rect.
+ *
+ * @param cheese The cheese context.
+ * @param style The style to write.
+ * @param gradient The four-corner gradient.
+ */
+void cheese_slider_set_fill_gradient(cheese_t *cheese, cheese_style_t *style,
+                                     cheese_gradient_t gradient);
+
 #endif // !CHEESE_WIDGETS_SLIDER_H

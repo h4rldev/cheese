@@ -8,7 +8,6 @@
 #include <cheese/core/input.h>
 #include <cheese/core/layout.h>
 #include <cheese/core/overlay.h>
-#include <cheese/core/style.h>
 
 #include <cheese/render/draw.h>
 

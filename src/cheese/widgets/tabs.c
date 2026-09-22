@@ -9,7 +9,10 @@
 #include <cheese/core/layout.h>
 #include <cheese/core/semantics.h>
 #include <cheese/core/state.h>
-#include <cheese/core/style.h>
+
+#include <cheese/style/prop.h>
+#include <cheese/style/resolve.h>
+#include <cheese/style/value.h>
 
 #include <cheese/render/draw.h>
 #include <cheese/render/font.h>
@@ -20,16 +23,19 @@
 /***********************************/
 
 static u32 tabs_prop_selected_opacity;
+static u32 tabs_prop_selected_gradient;
 static u32 tabs_prop_background_opacity;
 
 static void cheese_tabs_props(cheese_t *cheese) {
   if (tabs_prop_selected_opacity)
     return;
 
-  tabs_prop_selected_opacity =
-      cheese_prop_register(cheese, "tabs/selected/opacity", CHEESE_PROP_F32);
-  tabs_prop_background_opacity =
-      cheese_prop_register(cheese, "tabs/background/opacity", CHEESE_PROP_F32);
+  tabs_prop_selected_opacity = cheese_style_prop_register(
+      cheese, "tabs/selected/opacity", CHEESE_PROP_F32);
+  tabs_prop_selected_gradient = cheese_style_prop_register(
+      cheese, "tabs/selected/gradient", CHEESE_PROP_PTR);
+  tabs_prop_background_opacity = cheese_style_prop_register(
+      cheese, "tabs/background/opacity", CHEESE_PROP_F32);
 }
 
 //
@@ -88,11 +94,11 @@ i32 cheese_tab_bar(cheese_t *cheese, const cstr *classes,
   cheese_color_t text_color = style.text_color ? style.text_color : 0x000000FF;
 
   f32 whole =
-      cheese_style_get_prop_f32(&style, cheese->core_props.opacity, 1.0f);
+      cheese_style_prop_get_f32(&style, cheese->core_props.opacity, 1.0f);
   f32 selected_alpha =
-      cheese_style_get_prop_f32(&style, tabs_prop_selected_opacity, whole);
+      cheese_style_prop_get_f32(&style, tabs_prop_selected_opacity, whole);
   f32 bg_alpha =
-      cheese_style_get_prop_f32(&style, tabs_prop_background_opacity, whole);
+      cheese_style_prop_get_f32(&style, tabs_prop_background_opacity, whole);
 
   f32 tx = x;
   for (u32 i = 0; i < count; i++) {
@@ -106,8 +112,8 @@ i32 cheese_tab_bar(cheese_t *cheese, const cstr *classes,
                         &scope);
 
     if (is_sel)
-      cheese_draw_bg(cheese, &style, tx, y, tab_w[i], h, hover, 0,
-                     selected_alpha);
+      cheese_draw_fill(cheese, &style, tx, y, tab_w[i], h, hover,
+                       tabs_prop_selected_gradient, 0, selected_alpha);
     else if (scope.hovered && bg)
       cheese_draw_bg(cheese, &style, tx, y, tab_w[i], h, bg, 0, bg_alpha);
 
@@ -168,4 +174,14 @@ i32 cheese_tab_bar_auto(cheese_t *cheese, const cstr *classes,
 
   return cheese_tab_bar(cheese, classes, semantics, x, y, w, h, selected,
                         labels, count, font);
+}
+
+void cheese_tabs_set_selected_gradient(cheese_t *cheese, cheese_style_t *style,
+                                       cheese_gradient_t gradient) {
+  if (!cheese || !style)
+    return;
+
+  cheese_tabs_props(cheese);
+  cheese_style_prop_set_gradient(cheese, style, tabs_prop_selected_gradient,
+                                 gradient);
 }

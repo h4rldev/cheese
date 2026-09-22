@@ -26,6 +26,9 @@
 /***********************************/
 
 #define CHEESE_SDF_BASE_SIZE 48
+#define CHEESE_FONT_WIDTH_CACHE_SLOTS 128
+#define CHEESE_FONT_WIDTH_CACHE_MAX_LEN 8192
+#define CHEESE_FONT_WIDTH_CACHE_BUDGET (MiB(4))
 
 static ft_library_t g_ft_library = null;
 static b32 g_font_system_initialized = false;
@@ -480,6 +483,250 @@ static void cheese_font_build_sdf_variant(cheese_font_t *font) {
 //
 //
 
+/**
+ * @brief Shapes @p text into a fresh HarfBuzz buffer.
+ * @details Configures the buffer as left-to-right, common-script, English,
+ * runs HarfBuzz once and returns the buffer through @p out. The caller owns it
+ * and must destroy it.
+ *
+ * @param font The font to shape with.
+ * @param text The UTF-8 text to shape.
+ * @param out Receives the shaped buffer.
+ * @pre @p font has an active variant with a HarfBuzz font.
+ */
+static void cheese_font_shape_buffer(cheese_font_t *font, const string *text,
+                                     hb_buffer_t **out) {
+  hb_buffer_t *buf = hb_buffer_create();
+  hb_buffer_add_utf8(buf, (const cstr *)text->base, (int)text->len, 0, -1);
+  hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
+  hb_buffer_set_script(buf, HB_SCRIPT_COMMON);
+  hb_buffer_set_language(buf, hb_language_from_string("en", -1));
+  hb_shape(font->active_variant->hb_font, buf, NULL, 0);
+  *out = buf;
+}
+
+/**
+ * @brief Accumulates a shaped run's advances into cumulative byte widths.
+ * @details Walks the glyphs in cluster order, adding each advance as its byte
+ * boundary is passed, so @c out[i] holds the width of the @c [0, i) prefix
+ * scaled by @c font->scale. A substring's width is therefore
+ * @c out[end] - out[start]. When @p out is null nothing is written.
+ *
+ * @param font The font the run was shaped with.
+ * @param info Shaped glyph info.
+ * @param pos Shaped glyph positions.
+ * @param count Number of glyphs in @p info / @p pos.
+ * @param len Length of the shaped text, in bytes.
+ * @param out Receives @c len + 1 cumulative widths, or null to skip.
+ * @return The total scaled width of the run.
+ */
+static f32 cheese_font_fill_widths(cheese_font_t *font,
+                                   const hb_glyph_info_t *info,
+                                   const hb_glyph_position_t *pos, u32 count,
+                                   u32 len, f32 *out) {
+  f32 width = 0.0f;
+  u32 g = 0;
+  for (u32 i = 0; i <= len; i++) {
+    while (g < count && info[g].cluster < i)
+      width += (f32)pos[g++].x_advance / 64.0f;
+    if (out)
+      out[i] = width * font->scale;
+  }
+  return width * font->scale;
+}
+
+/**
+ * @brief Emits one quad per glyph of a shaped run.
+ * @details Advances a pen by each glyph's scaled advance and, for glyphs that
+ * have coverage, calls @p emit with the glyph's screen-space quad.
+ *
+ * @param font The font the run was shaped with.
+ * @param info Shaped glyph info.
+ * @param pos Shaped glyph positions.
+ * @param count Number of glyphs in @p info / @p pos.
+ * @param x Pen origin x, in pixels.
+ * @param y Pen origin y (baseline), in pixels.
+ * @param scale Extra scale multiplied with @c font->scale.
+ * @param color Colour passed to every emitted quad.
+ * @param emit Receiver for each quad.
+ * @param userdata Opaque pointer forwarded to @p emit.
+ */
+static void cheese_font_emit_run(cheese_font_t *font,
+                                 const hb_glyph_info_t *info,
+                                 const hb_glyph_position_t *pos, u32 count,
+                                 f32 x, f32 y, f32 scale, cheese_color_t color,
+                                 cheese_glyph_emit_fn emit, void *userdata) {
+  cheese_font_size_variant_t *variant = font->active_variant;
+
+  f32 cursor_x = x;
+  f32 cursor_y = y;
+  f32 s = scale * (font->scale > 0.0f ? font->scale : 1.0f);
+
+  for (u32 i = 0; i < count; i++) {
+    f32 x_advance = (f32)pos[i].x_advance / 64.0f;
+    f32 y_advance = (f32)pos[i].y_advance / 64.0f;
+    f32 x_offset = (f32)pos[i].x_offset / 64.0f;
+    f32 y_offset = (f32)pos[i].y_offset / 64.0f;
+
+    cheese_glyph_t *glyph = cheese_font_get_glyph(font, info[i].codepoint);
+    if (!glyph || glyph->width == 0 || glyph->height == 0) {
+      cursor_x += x_advance * s;
+      cursor_y += y_advance * s;
+      continue;
+    }
+
+    cheese_glyph_quad_t quad = {
+        .x = cursor_x + (glyph->bearing_x + x_offset) * s,
+        .y = cursor_y - (glyph->bearing_y + y_offset) * s,
+        .w = glyph->width * s,
+        .h = glyph->height * s,
+        .u0 = glyph->u0,
+        .v0 = glyph->v0,
+        .u1 = glyph->u1,
+        .v1 = glyph->v1,
+        .texture_id = variant->atlas_texture_id,
+        .color = color,
+    };
+    emit(userdata, &quad);
+
+    cursor_x += x_advance * s;
+    cursor_y += y_advance * s;
+  }
+}
+
+/**
+ * @brief Shapes @p text directly, without the cache.
+ * @details Runs one HarfBuzz shape and fills @p out (when non-null) with
+ * cumulative byte widths. Used for text too long to cache.
+ *
+ * @param font The font to shape with.
+ * @param text The UTF-8 text to measure.
+ * @param out Receives @c text->len + 1 cumulative widths, or null to skip.
+ * @return The total scaled width of @p text.
+ * @pre @p font has an active variant.
+ */
+static f32 cheese_font_shape_widths(cheese_font_t *font, const string *text,
+                                    f32 *out) {
+  u32 len = (u32)text->len;
+  if (out)
+    out[0] = 0.0f;
+  if (len == 0)
+    return 0.0f;
+
+  hb_buffer_t *buf;
+  cheese_font_shape_buffer(font, text, &buf);
+
+  u32 count;
+  hb_glyph_info_t *info = hb_buffer_get_glyph_infos(buf, &count);
+  hb_glyph_position_t *pos = hb_buffer_get_glyph_positions(buf, &count);
+
+  f32 width = cheese_font_fill_widths(font, info, pos, count, len, out);
+
+  hb_buffer_destroy(buf);
+  return width;
+}
+
+/**
+ * @brief Returns the cached shape of @p text, shaping on a miss.
+ * @details Memoizes both the cumulative widths and the HarfBuzz glyph run,
+ * keyed by the exact text bytes plus the active variant and @c font->scale, so
+ * repeated frames reuse one shape for measuring and for drawing. The returned
+ * entry is owned by the font and stays valid until the cache's byte budget is
+ * exceeded, at which point the whole cache is dropped and rebuilt on demand.
+ *
+ * @param font The font to shape with; the cache is updated in place.
+ * @param text The UTF-8 text to shape.
+ * @return The cache entry, or null when @p text is too long or the cache is
+ *         unavailable (the caller then shapes directly).
+ * @pre @p font has an active variant.
+ */
+static cheese_font_width_entry_t *cheese_font_run_cached(cheese_font_t *font,
+                                                         const string *text) {
+  if (!font->shape_arena || !font->width_cache)
+    return null;
+
+  u32 len = (u32)text->len;
+  if (len > CHEESE_FONT_WIDTH_CACHE_MAX_LEN)
+    return null;
+
+  cheese_font_size_variant_t *variant = font->active_variant;
+  f32 scale = font->scale;
+
+  u64 hash = 14695981039346656037ull;
+  for (u32 i = 0; i < len; i++) {
+    hash ^= (u8)text->base[i];
+    hash *= 1099511628211ull;
+  }
+  hash ^= (u64)(uintptr_t)variant;
+  hash *= 1099511628211ull;
+  hash ^= (u64)(i64)(scale * 100000.0f);
+  hash *= 1099511628211ull;
+
+  for (u32 i = 0; i < font->width_cache_count; i++) {
+    cheese_font_width_entry_t *e = &font->width_cache[i];
+    if (e->hash != hash || e->len != len || e->variant != variant ||
+        e->scale != scale)
+      continue;
+    if (len > 0 && memcmp(e->bytes, text->base, len) != 0)
+      continue;
+    return e;
+  }
+
+  hb_buffer_t *buf;
+  cheese_font_shape_buffer(font, text, &buf);
+
+  u32 count;
+  hb_glyph_info_t *info = hb_buffer_get_glyph_infos(buf, &count);
+  hb_glyph_position_t *pos = hb_buffer_get_glyph_positions(buf, &count);
+
+  u64 need =
+      (u64)(len + 1) * sizeof(f32) + (len > 0 ? len : 1) +
+      (u64)count * (sizeof(hb_glyph_info_t) + sizeof(hb_glyph_position_t));
+  if (font->width_cache_bytes + need > CHEESE_FONT_WIDTH_CACHE_BUDGET) {
+    arena_clear(font->shape_arena);
+    font->width_cache_count = 0;
+    font->width_cache_next = 0;
+    font->width_cache_bytes = 0;
+  }
+
+  cheese_font_width_entry_t *e;
+  if (font->width_cache_count < CHEESE_FONT_WIDTH_CACHE_SLOTS) {
+    e = &font->width_cache[font->width_cache_count++];
+  } else {
+    e = &font->width_cache[font->width_cache_next];
+    font->width_cache_next =
+        (font->width_cache_next + 1) % CHEESE_FONT_WIDTH_CACHE_SLOTS;
+  }
+
+  e->hash = hash;
+  e->len = len;
+  e->variant = variant;
+  e->scale = scale;
+  e->bytes = arena_alloc(font->shape_arena, u8, (len > 0 ? len : 1));
+  if (len > 0)
+    memcpy(e->bytes, text->base, len);
+  e->widths = arena_alloc(font->shape_arena, f32, (len + 1));
+  e->info =
+      arena_alloc(font->shape_arena, hb_glyph_info_t, (count > 0 ? count : 1));
+  e->pos = arena_alloc(font->shape_arena, hb_glyph_position_t,
+                       (count > 0 ? count : 1));
+  e->glyph_count = count;
+  font->width_cache_bytes += need;
+
+  if (count > 0) {
+    memcpy(e->info, info, (u64)count * sizeof(hb_glyph_info_t));
+    memcpy(e->pos, pos, (u64)count * sizeof(hb_glyph_position_t));
+  }
+  cheese_font_fill_widths(font, info, pos, count, len, e->widths);
+
+  hb_buffer_destroy(buf);
+  return e;
+}
+
+//
+//
+//
+
 b32 cheese_font_system_init(void) {
   if (g_font_system_initialized)
     return true;
@@ -568,23 +815,32 @@ f32 cheese_font_measure_text(const cheese_font_t *font, const string *label) {
   if (!font || !font->active_variant || !label || label->len == 0)
     return 0.0f;
 
-  hb_buffer_t *buf = hb_buffer_create();
-  hb_buffer_add_utf8(buf, (const cstr *)label->base, (int)label->len, 0, -1);
-  hb_buffer_guess_segment_properties(buf);
+  cheese_font_width_entry_t *e =
+      cheese_font_run_cached((cheese_font_t *)font, label);
+  if (e)
+    return e->widths[label->len];
 
-  hb_shape(font->active_variant->hb_font, buf, NULL, 0);
+  return cheese_font_shape_widths((cheese_font_t *)font, label, null);
+}
 
-  u32 glyph_count;
-  hb_glyph_position_t *glyph_pos =
-      hb_buffer_get_glyph_positions(buf, &glyph_count);
+void cheese_font_prefix_widths(const cheese_font_t *font, const string *text,
+                               f32 *out) {
+  if (!font || !font->active_variant || !text || !out)
+    return;
 
-  f32 total_width = 0.0f;
-  for (u32 i = 0; i < glyph_count; i++) {
-    total_width += (f32)glyph_pos[i].x_advance / 64.0f;
+  u32 len = (u32)text->len;
+  out[0] = 0.0f;
+  if (len == 0)
+    return;
+
+  cheese_font_width_entry_t *e =
+      cheese_font_run_cached((cheese_font_t *)font, text);
+  if (e) {
+    memcpy(out, e->widths, (len + 1) * sizeof(f32));
+    return;
   }
 
-  hb_buffer_destroy(buf);
-  return total_width * font->scale;
+  cheese_font_shape_widths((cheese_font_t *)font, text, out);
 }
 
 void cheese_font_shape_run(cheese_font_t *font, const string *text, f32 x,
@@ -597,57 +853,26 @@ void cheese_font_shape_run(cheese_font_t *font, const string *text, f32 x,
   if (!variant->atlas_texture_id || variant->atlas_dirty)
     return;
 
-  hb_buffer_t *buf = hb_buffer_create();
-  hb_buffer_add_utf8(buf, (const cstr *)text->base, (int)text->len, 0, -1);
-  hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
-  hb_buffer_set_script(buf, HB_SCRIPT_COMMON);
-  hb_buffer_set_language(buf, hb_language_from_string("en", -1));
-  hb_shape(variant->hb_font, buf, NULL, 0);
+  cheese_font_width_entry_t *e = cheese_font_run_cached(font, text);
+  if (e) {
+    cheese_font_emit_run(font, e->info, e->pos, e->glyph_count, x, y, scale,
+                         color, emit, userdata);
+    return;
+  }
+
+  hb_buffer_t *buf = null;
+  cheese_font_shape_buffer(font, text, &buf);
 
   u32 glyph_count;
   hb_glyph_info_t *glyph_info = hb_buffer_get_glyph_infos(buf, &glyph_count);
   hb_glyph_position_t *glyph_pos =
       hb_buffer_get_glyph_positions(buf, &glyph_count);
 
-  f32 cursor_x = x;
-  f32 cursor_y = y;
-  f32 s = scale * (font->scale > 0.0f ? font->scale : 1.0f);
-
-  for (u32 i = 0; i < glyph_count; i++) {
-    f32 x_advance = (f32)glyph_pos[i].x_advance / 64.0f;
-    f32 y_advance = (f32)glyph_pos[i].y_advance / 64.0f;
-    f32 x_offset = (f32)glyph_pos[i].x_offset / 64.0f;
-    f32 y_offset = (f32)glyph_pos[i].y_offset / 64.0f;
-
-    cheese_glyph_t *glyph =
-        cheese_font_get_glyph(font, glyph_info[i].codepoint);
-    if (!glyph || glyph->width == 0 || glyph->height == 0) {
-      cursor_x += x_advance * s;
-      cursor_y += y_advance * s;
-      continue;
-    }
-
-    cheese_glyph_quad_t quad = {
-        .x = cursor_x + (glyph->bearing_x + x_offset) * s,
-        .y = cursor_y - (glyph->bearing_y + y_offset) * s,
-        .w = glyph->width * s,
-        .h = glyph->height * s,
-        .u0 = glyph->u0,
-        .v0 = glyph->v0,
-        .u1 = glyph->u1,
-        .v1 = glyph->v1,
-        .texture_id = variant->atlas_texture_id,
-        .color = color,
-    };
-    emit(userdata, &quad);
-
-    cursor_x += x_advance * s;
-    cursor_y += y_advance * s;
-  }
+  cheese_font_emit_run(font, glyph_info, glyph_pos, glyph_count, x, y, scale,
+                       color, emit, userdata);
 
   hb_buffer_destroy(buf);
 }
-
 void cheese_font_set_size(cheese_font_t *font, u32 pixel_size) {
   if (!font)
     return;
@@ -798,6 +1023,9 @@ cheese_font_t *cheese_load_font(cheese_renderer_t *renderer, arena_t *arena,
   font->ft_face = ft_face;
   font->arena = arena;
   font->scratch = arena_new(GiB(1), MiB(1));
+  font->shape_arena = arena_new(MiB(8), MiB(1));
+  font->width_cache = arena_alloc_zeroed(arena, cheese_font_width_entry_t,
+                                         CHEESE_FONT_WIDTH_CACHE_SLOTS);
   font->default_size = font_size;
   font->scale = 1.0f;
   font->sdf = renderer ? renderer->sdf_text : false;
@@ -830,4 +1058,7 @@ void cheese_font_destroy(cheese_renderer_t *renderer, cheese_font_t *font) {
 
   if (font->scratch)
     arena_free(font->scratch);
+
+  if (font->shape_arena)
+    arena_free(font->shape_arena);
 }

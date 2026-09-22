@@ -1,5 +1,5 @@
-#ifndef CHEESE_CORE_THEME_H
-#define CHEESE_CORE_THEME_H
+#ifndef CHEESE_STYLE_THEME_H
+#define CHEESE_STYLE_THEME_H
 
 /***********************************/
 
@@ -235,4 +235,4 @@ i32 cheese_theme_i32(const cheese_t *cheese, const cstr *name, i32 fallback);
  */
 b32 cheese_theme_b32(const cheese_t *cheese, const cstr *name, b32 fallback);
 
-#endif // !CHEESE_CORE_THEME_H
+#endif // !CHEESE_STYLE_THEME_H

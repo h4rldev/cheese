@@ -8,7 +8,9 @@
 #include <cheese/types.h>
 
 #include <cheese/core/init.h>
-#include <cheese/core/style.h>
+
+#include <cheese/style/resolve.h>
+#include <cheese/style/value.h>
 
 /***********************************/
 

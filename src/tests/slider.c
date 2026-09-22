@@ -11,7 +11,10 @@
 #include <cheese/core/input.h>
 #include <cheese/core/semantics.h>
 #include <cheese/core/state.h>
-#include <cheese/core/style.h>
+
+#include <cheese/style/prop.h>
+#include <cheese/style/resolve.h>
+#include <cheese/style/value.h>
 
 #include <cheese/widgets/slider.h>
 
@@ -152,15 +155,15 @@ int main(void) {
 
   cheese_begin(&cheese, frame, null, &g_renderer, away, 0.016f);
   {
-    u32 thumb_color =
-        cheese_prop_register(&cheese, "slider/thumb/color", CHEESE_PROP_COLOR);
-    u32 thumb_radius =
-        cheese_prop_register(&cheese, "slider/thumb/radius", CHEESE_PROP_F32);
+    u32 thumb_color = cheese_style_prop_register(&cheese, "slider/thumb/color",
+                                                 CHEESE_PROP_COLOR);
+    u32 thumb_radius = cheese_style_prop_register(
+        &cheese, "slider/thumb/radius", CHEESE_PROP_F32);
 
     cheese_style_t thumb_style = cheese_style_new();
-    cheese_style_set_prop_color(&cheese, &thumb_style, thumb_color,
+    cheese_style_prop_set_color(&cheese, &thumb_style, thumb_color,
                                 cheese_color_rgb(1, 2, 3));
-    cheese_style_set_prop_f32(&cheese, &thumb_style, thumb_radius, 7.0f);
+    cheese_style_prop_set_f32(&cheese, &thumb_style, thumb_radius, 7.0f);
     cheese_style_class_register(&cheese, "test-thumb", thumb_style);
 
     cheese_slider(&cheese, "slider test-thumb",

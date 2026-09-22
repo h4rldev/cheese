@@ -8,7 +8,10 @@
 #include <cheese/core/input.h>
 #include <cheese/core/layout.h>
 #include <cheese/core/semantics.h>
-#include <cheese/core/style.h>
+
+#include <cheese/style/prop.h>
+#include <cheese/style/resolve.h>
+
 #include <cheese/render/draw.h>
 #include <cheese/render/font.h>
 
@@ -33,7 +36,7 @@ void cheese_image(cheese_t *cheese, const cstr *classes,
   if (!texture.id || texture.width == 0 || texture.height == 0) {
     if (style.bg_color) {
       f32 alpha =
-          cheese_style_get_prop_f32(&style, cheese->core_props.opacity, 1.0f);
+          cheese_style_prop_get_f32(&style, cheese->core_props.opacity, 1.0f);
       cheese_draw_bg(cheese, &style, x, y, w, h, style.bg_color, 0, alpha);
     }
     return;

@@ -7,8 +7,10 @@
 #include <cheese/log.h>
 #include <cheese/types.h>
 
-#include <cheese/core/style.h>
-#include <cheese/core/theme.h>
+#include <cheese/style/prop.h>
+#include <cheese/style/resolve.h>
+#include <cheese/style/theme.h>
+#include <cheese/style/value.h>
 
 /***********************************/
 
@@ -58,11 +60,11 @@ static void cheese_theme_register_classes(cheese_t *cheese,
                                           const cheese_theme_t *t) {
   cheese_style_t base = cheese_style_new();
   cheese_style_set_text_color(&base, t->on_surface);
-  cheese_style_set_prop_color(cheese, &base,
+  cheese_style_prop_set_color(cheese, &base,
                               cheese->core_props.focus_ring_color, t->primary);
-  cheese_style_set_prop_f32(cheese, &base, cheese->core_props.focus_ring_width,
+  cheese_style_prop_set_f32(cheese, &base, cheese->core_props.focus_ring_width,
                             2.0f);
-  cheese_style_set_prop_f32(cheese, &base, cheese->core_props.focus_ring_offset,
+  cheese_style_prop_set_f32(cheese, &base, cheese->core_props.focus_ring_offset,
                             2.0f);
 
   cheese->scope_stack[0].style = base;
@@ -94,9 +96,9 @@ static void cheese_theme_register_classes(cheese_t *cheese,
   cheese_style_t checkbox = cheese_style_new();
   cheese_style_set_bg_color(&checkbox, t->surface_variant);
   cheese_style_set_text_color(&checkbox, t->on_surface);
-  cheese_style_set_prop_color(cheese, &checkbox,
+  cheese_style_prop_set_color(cheese, &checkbox,
                               cheese->core_props.border_color, t->outline);
-  cheese_style_set_prop_f32(cheese, &checkbox, cheese->core_props.border_width,
+  cheese_style_prop_set_f32(cheese, &checkbox, cheese->core_props.border_width,
                             1.0f);
   cheese_style_set_corner_radius_uniform(&checkbox, t->radius_sm);
   cheese_style_set_state_layer_color(&checkbox, t->on_surface);
@@ -105,9 +107,9 @@ static void cheese_theme_register_classes(cheese_t *cheese,
   cheese_style_t radio = cheese_style_new();
   cheese_style_set_bg_color(&radio, t->surface_variant);
   cheese_style_set_text_color(&radio, t->on_surface);
-  cheese_style_set_prop_color(cheese, &radio, cheese->core_props.border_color,
+  cheese_style_prop_set_color(cheese, &radio, cheese->core_props.border_color,
                               t->outline);
-  cheese_style_set_prop_f32(cheese, &radio, cheese->core_props.border_width,
+  cheese_style_prop_set_f32(cheese, &radio, cheese->core_props.border_width,
                             1.0f);
   cheese_style_set_state_layer_color(&radio, t->on_surface);
   cheese_style_class_register(cheese, CHEESE_CLASS_RADIO, radio);
@@ -133,9 +135,9 @@ static void cheese_theme_register_classes(cheese_t *cheese,
   cheese_style_t text_input = cheese_style_new();
   cheese_style_set_bg_color(&text_input, t->surface_variant);
   cheese_style_set_text_color(&text_input, t->on_surface);
-  cheese_style_set_prop_color(cheese, &text_input,
+  cheese_style_prop_set_color(cheese, &text_input,
                               cheese->core_props.border_color, t->outline);
-  cheese_style_set_prop_f32(cheese, &text_input,
+  cheese_style_prop_set_f32(cheese, &text_input,
                             cheese->core_props.border_width, 1.0f);
   cheese_style_set_corner_radius_uniform(&text_input, t->radius_sm);
   cheese_style_set_padding(&text_input, t->space_sm, t->space_xs, t->space_xs,
@@ -147,9 +149,9 @@ static void cheese_theme_register_classes(cheese_t *cheese,
   cheese_style_t dropdown = cheese_style_new();
   cheese_style_set_bg_color(&dropdown, t->surface_variant);
   cheese_style_set_text_color(&dropdown, t->on_surface);
-  cheese_style_set_prop_color(cheese, &dropdown,
+  cheese_style_prop_set_color(cheese, &dropdown,
                               cheese->core_props.border_color, t->outline);
-  cheese_style_set_prop_f32(cheese, &dropdown, cheese->core_props.border_width,
+  cheese_style_prop_set_f32(cheese, &dropdown, cheese->core_props.border_width,
                             1.0f);
   cheese_style_set_corner_radius_uniform(&dropdown, t->radius_sm);
   cheese_style_set_padding(&dropdown, t->space_md, t->space_xs, t->space_xs,

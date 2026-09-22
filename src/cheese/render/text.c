@@ -27,6 +27,14 @@ cheese_text_line_t *cheese_text_lines(cheese_t *cheese, cheese_font_t *font,
   da_new(cheese->frame_arena, lines, 8);
 
   b32 wrap = font && wrap_w > 0.0f;
+
+  f32 *cumulative_w = null;
+  if (wrap && len > 0) {
+    cumulative_w = arena_alloc(cheese->frame_arena, f32, len + 1);
+    string full = {(u8 *)s, len};
+    cheese_font_prefix_widths(font, &full, cumulative_w);
+  }
+
   u32 hard_start = 0;
 
   for (u32 i = 0; i <= len; i++) {
@@ -49,7 +57,7 @@ cheese_text_line_t *cheese_text_lines(cheese_t *cheese, cheese_font_t *font,
 
         while (j < hard_end) {
           u32 next = cheese_utf8_next(s, hard_end, j);
-          f32 w = cheese_text_prefix_w(font, s + start, next - start);
+          f32 w = cumulative_w[next] - cumulative_w[start];
           if (w > wrap_w && j > start)
             break;
 
@@ -94,17 +102,22 @@ u32 cheese_text_line_of(const cheese_text_line_t *lines, u32 count, u32 byte) {
   return count > 0 ? count - 1 : 0;
 }
 
-u32 cheese_text_caret_from_x(cheese_font_t *font, const cstr *s, u32 start,
-                             u32 end, f32 local) {
-  if (!font || local <= 0.0f)
+u32 cheese_text_caret_from_x(cheese_t *cheese, cheese_font_t *font,
+                             const cstr *s, u32 start, u32 end, f32 local) {
+  if (!cheese || !font || local <= 0.0f || end <= start)
     return start;
+
+  u32 n = end - start;
+  f32 *cumulative_a = arena_alloc_zeroed(cheese->frame_arena, f32, n + 1);
+  string_slice full = {(u8 *)(s + start), n};
+  cheese_font_prefix_widths(font, &full, cumulative_a);
 
   u32 i = start;
   f32 prev = 0.0f;
 
   while (i < end) {
     u32 next = cheese_utf8_next(s, end, i);
-    f32 w = cheese_text_prefix_w(font, s + start, next - start);
+    f32 w = cumulative_a[next - start];
 
     if (local < (prev + w) * 0.5f)
       break;

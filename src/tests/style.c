@@ -8,7 +8,8 @@
 #include <cheese/types.h>
 
 #include <cheese/core/init.h>
-#include <cheese/core/style.h>
+
+#include <cheese/style.h>
 
 /***********************************/
 
@@ -96,59 +97,59 @@ int main(void) {
   cheese_style_t none;
   cheese_style_resolve(&cheese, &none, "missing");
   assert(none.bg_color == 1 && "the style stack still shows through");
-  u32 thumb_color =
-      cheese_prop_register(&cheese, "test/thumb/color", CHEESE_PROP_COLOR);
+  u32 thumb_color = cheese_style_prop_register(&cheese, "test/thumb/color",
+                                               CHEESE_PROP_COLOR);
   u32 thumb_radius =
-      cheese_prop_register(&cheese, "test/thumb/radius", CHEESE_PROP_F32);
+      cheese_style_prop_register(&cheese, "test/thumb/radius", CHEESE_PROP_F32);
   u32 thumb_sides =
-      cheese_prop_register(&cheese, "test/thumb/sides", CHEESE_PROP_U32);
+      cheese_style_prop_register(&cheese, "test/thumb/sides", CHEESE_PROP_U32);
   assert(thumb_color != 0 && thumb_radius != 0 && thumb_color != thumb_radius);
-  assert(cheese_prop_register(&cheese, "test/thumb/color", CHEESE_PROP_COLOR) ==
-             thumb_color &&
+  assert(cheese_style_prop_register(&cheese, "test/thumb/color",
+                                    CHEESE_PROP_COLOR) == thumb_color &&
          "property ids are stable");
 
   cheese_style_t props = cheese_style_new();
-  cheese_style_set_prop_color(&cheese, &props, thumb_color,
+  cheese_style_prop_set_color(&cheese, &props, thumb_color,
                               cheese_color_rgb(10, 10, 10));
-  cheese_style_set_prop_f32(&cheese, &props, thumb_radius, 4.0f);
-  cheese_style_set_prop_u32(&cheese, &props, thumb_sides, 5);
+  cheese_style_prop_set_f32(&cheese, &props, thumb_radius, 4.0f);
+  cheese_style_prop_set_u32(&cheese, &props, thumb_sides, 5);
   cheese_push_style(&cheese, props);
 
   cheese_style_t resolved;
   cheese_style_resolve(&cheese, &resolved, null);
 
-  assert(cheese_style_get_prop_color(&resolved, thumb_color, 0) ==
+  assert(cheese_style_prop_get_color(&resolved, thumb_color, 0) ==
              cheese_color_rgb(10, 10, 10) &&
          "a pushed property merges into resolve");
-  assert(cheese_style_get_prop_f32(&resolved, thumb_radius, -1.0f) == 4.0f);
-  assert(cheese_style_get_prop_u32(&resolved, thumb_sides, 0) == 5 &&
+  assert(cheese_style_prop_get_f32(&resolved, thumb_radius, -1.0f) == 4.0f);
+  assert(cheese_style_prop_get_u32(&resolved, thumb_sides, 0) == 5 &&
          "a u32 property round-trips");
-  assert(cheese_style_get_prop_u32(&resolved, thumb_radius, 99) == 99 &&
+  assert(cheese_style_prop_get_u32(&resolved, thumb_radius, 99) == 99 &&
          "an f32 property does not answer a u32 read");
-  assert(cheese_style_get_prop_f32(&resolved, thumb_color, -1.0f) == -1.0f &&
+  assert(cheese_style_prop_get_f32(&resolved, thumb_color, -1.0f) == -1.0f &&
          "a colour property does not answer an f32 read");
 
   cheese_prop_t absent;
-  assert(!cheese_style_get_prop(&resolved, 9999, &absent) &&
+  assert(!cheese_style_prop_get(&resolved, 9999, &absent) &&
          "an unknown property is absent");
 
   cheese_style_t transparent = cheese_style_new();
-  cheese_style_set_prop_color(&cheese, &transparent, thumb_color, 0);
-  assert(cheese_style_get_prop_color(&transparent, thumb_color, 0x12345678) ==
+  cheese_style_prop_set_color(&cheese, &transparent, thumb_color, 0);
+  assert(cheese_style_prop_get_color(&transparent, thumb_color, 0x12345678) ==
              0 &&
          "a transparent property value is representable");
 
   cheese_style_t cls = cheese_style_new();
-  cheese_style_set_prop_color(&cheese, &cls, thumb_color,
+  cheese_style_prop_set_color(&cheese, &cls, thumb_color,
                               cheese_color_rgb(20, 20, 20));
   cheese_style_class_register(&cheese, "prop-test", cls);
 
   cheese_style_t overridden;
   cheese_style_resolve(&cheese, &overridden, "prop-test");
-  assert(cheese_style_get_prop_color(&overridden, thumb_color, 0) ==
+  assert(cheese_style_prop_get_color(&overridden, thumb_color, 0) ==
              cheese_color_rgb(20, 20, 20) &&
          "class override recurses into properties");
-  assert(cheese_style_get_prop_f32(&overridden, thumb_radius, -1.0f) == 4.0f &&
+  assert(cheese_style_prop_get_f32(&overridden, thumb_radius, -1.0f) == 4.0f &&
          "the pushed property survives the class override");
 
   cheese_style_t boxed = cheese_style_new();

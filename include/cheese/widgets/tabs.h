@@ -49,4 +49,22 @@ i32 cheese_tab_bar_auto(cheese_t *cheese, const cstr *classes,
                         const cstr *const *labels, u32 count,
                         cheese_font_t *font);
 
+//
+//
+//
+
+/**
+ * @brief Set the selected tab's gradient.
+ * @details Sets the widget-owned `"tabs/selected/gradient"` property on
+ * @p style; the selected tab's background draws it instead of its flat colour.
+ * Hover and unselected tabs keep the core `"bg/gradient"`, so a background
+ * gradient never colours the selected tab. The gradient spans the tab rect.
+ *
+ * @param cheese The cheese context.
+ * @param style The style to write.
+ * @param gradient The four-corner gradient.
+ */
+void cheese_tabs_set_selected_gradient(cheese_t *cheese, cheese_style_t *style,
+                                       cheese_gradient_t gradient);
+
 #endif // !CHEESE_WIDGETS_TABS_H

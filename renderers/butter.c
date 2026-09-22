@@ -29,6 +29,22 @@ typedef struct {
   f32 r, g, b, a;
 } vertex_t;
 
+//
+//
+//
+
+/**
+ * @brief Emit context for one shaped text run drawn by butter.
+ */
+typedef struct {
+  butter_renderer_t *renderer;
+  butter_pipeline_t *pipe;
+} butter_text_emit_t;
+
+//
+//
+//
+
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
@@ -90,6 +106,13 @@ static void butter_renderer_queue(butter_renderer_t *renderer,
                                   butter_draw_cmd_t *cmd) {
   if (!renderer || !cmd)
     return;
+
+  if (renderer->clip_stack_depth > 0) {
+    cmd->scissor = renderer->clip_stack[renderer->clip_stack_depth - 1];
+    cmd->scissor_enabled = true;
+  } else {
+    cmd->scissor_enabled = false;
+  }
 
   if (renderer->draw_cmd_count >= renderer->draw_cmd_cap) {
     u64 new_cap = renderer->draw_cmd_cap * 2;
@@ -430,11 +453,6 @@ static void butter_draw_quad_textured(void *userdata, f32 x, f32 y, f32 w,
   cmd.vertex_count = 4;
   cmd.texture_id = texture_id;
 
-  if (renderer->clip_stack_depth > 0) {
-    cmd.scissor = renderer->clip_stack[renderer->clip_stack_depth - 1];
-    cmd.scissor_enabled = true;
-  }
-
   butter_renderer_queue(renderer, &cmd);
 }
 
@@ -476,12 +494,6 @@ static void butter_draw_line(void *userdata, f32 x1, f32 y1, f32 x2, f32 y2,
     cmd.vertex_count = 2;
     cmd.vertex_buffer = alloc.buffer;
     cmd.vertex_offset = alloc.offset;
-
-    if (renderer->clip_stack_depth > 0) {
-      cmd.scissor = renderer->clip_stack[renderer->clip_stack_depth - 1];
-      cmd.scissor_enabled = true;
-    } else
-      cmd.scissor_enabled = false;
 
     butter_renderer_queue(renderer, &cmd);
     return;
@@ -538,12 +550,6 @@ static void butter_draw_line(void *userdata, f32 x1, f32 y1, f32 x2, f32 y2,
   cmd.vertex_offset = alloc.offset;
   cmd.vertex_count = 4;
 
-  if (renderer->clip_stack_depth > 0) {
-    cmd.scissor = renderer->clip_stack[renderer->clip_stack_depth - 1];
-    cmd.scissor_enabled = true;
-  } else
-    cmd.scissor_enabled = false;
-
   butter_renderer_queue(renderer, &cmd);
 }
 
@@ -552,8 +558,6 @@ static void butter_draw_arc(void *userdata, f32 cx, f32 cy, f32 radius,
                             cheese_color_t color) {
   butter_renderer_t *renderer = (butter_renderer_t *)userdata;
   butter_t *butter = renderer->butter;
-
-  vk_rect2d_t current_clip = {0};
 
   f32 r, g, b, a;
   unpack_color(color, &r, &g, &b, &a);
@@ -572,10 +576,6 @@ static void butter_draw_arc(void *userdata, f32 cx, f32 cy, f32 radius,
   u32 segments = (u32)(angle_range / (2.0f * M_PI) * 36.0f);
   if (segments < 3)
     segments = 3;
-
-  b32 clip_active = (renderer->clip_stack_depth > 0);
-  if (clip_active)
-    current_clip = renderer->clip_stack[renderer->clip_stack_depth - 1];
 
   if (thickness > 0.0f && thickness <= 1.0f) {
     u32 vcount = segments + 1;
@@ -604,9 +604,6 @@ static void butter_draw_arc(void *userdata, f32 cx, f32 cy, f32 radius,
     cmd.vertex_count = vcount;
     cmd.vertex_buffer = alloc.buffer;
     cmd.vertex_offset = alloc.offset;
-    cmd.scissor_enabled = clip_active;
-    if (clip_active)
-      cmd.scissor = current_clip;
 
     butter_renderer_queue(renderer, &cmd);
     return;
@@ -642,9 +639,6 @@ static void butter_draw_arc(void *userdata, f32 cx, f32 cy, f32 radius,
     cmd.vertex_buffer = v_alloc.buffer;
     cmd.vertex_offset = v_alloc.offset;
     cmd.vertex_count = vcount;
-    cmd.scissor_enabled = clip_active;
-    if (clip_active)
-      cmd.scissor = current_clip;
 
     butter_renderer_queue(renderer, &cmd);
     return;
@@ -687,11 +681,23 @@ static void butter_draw_arc(void *userdata, f32 cx, f32 cy, f32 radius,
   cmd.vertex_buffer = v_alloc.buffer;
   cmd.vertex_offset = v_alloc.offset;
   cmd.vertex_count = vcount;
-  cmd.scissor_enabled = clip_active;
-  if (clip_active)
-    cmd.scissor = current_clip;
 
   butter_renderer_queue(renderer, &cmd);
+}
+
+/**
+ * @brief Draws one shaped glyph quad as a textured triangle.
+ * @details The callback handed to @ref cheese_font_shape_run; it forwards each
+ * quad to the shared textured-quad path with the run's pipeline.
+ *
+ * @param userdata The @ref butter_text_emit_t for this run.
+ * @param quad The glyph quad to draw.
+ */
+static void butter_emit_glyph(void *userdata, const cheese_glyph_quad_t *quad) {
+  butter_text_emit_t *emit = (butter_text_emit_t *)userdata;
+  butter_draw_quad_textured(emit->renderer, quad->x, quad->y, quad->w, quad->h,
+                            quad->u0, quad->v0, quad->u1, quad->v1,
+                            quad->texture_id, quad->color, emit->pipe);
 }
 
 static void butter_draw_text(void *userdata, f32 x, f32 y, const string *text,
@@ -709,56 +715,13 @@ static void butter_draw_text(void *userdata, f32 x, f32 y, const string *text,
     return;
   }
 
-  hb_buffer_t *hb_buffer = hb_buffer_create();
-  hb_buffer_add_utf8(hb_buffer, (cstr *)text->base, text->len, 0, -1);
-  hb_buffer_set_direction(hb_buffer, HB_DIRECTION_LTR);
-  hb_buffer_set_script(hb_buffer, HB_SCRIPT_COMMON);
-  hb_buffer_set_language(hb_buffer, hb_language_from_string("en", -1));
-  hb_shape(font->active_variant->hb_font, hb_buffer, NULL, 0);
+  butter_text_emit_t emit = {
+      .renderer = renderer,
+      .pipe = font->active_variant->sdf ? renderer->sdf_pipeline : null,
+  };
 
-  u32 glyph_count;
-  hb_glyph_info_t *glyph_info =
-      hb_buffer_get_glyph_infos(hb_buffer, &glyph_count);
-  hb_glyph_position_t *glyph_pos =
-      hb_buffer_get_glyph_positions(hb_buffer, &glyph_count);
-
-  f32 cursor_x = x;
-  f32 cursor_y = y;
-
-  f32 s = scale * (font->scale > 0.0f ? font->scale : 1.0f);
-  butter_pipeline_t *pipe =
-      font->active_variant->sdf ? renderer->sdf_pipeline : null;
-
-  for (u32 i = 0; i < glyph_count; i++) {
-    hb_codepoint_t glyph_id = glyph_info[i].codepoint;
-
-    f32 x_advance = (f32)glyph_pos[i].x_advance / 64.0f;
-    f32 y_advance = (f32)glyph_pos[i].y_advance / 64.0f;
-    f32 x_offset = (f32)glyph_pos[i].x_offset / 64.0f;
-    f32 y_offset = (f32)glyph_pos[i].y_offset / 64.0f;
-
-    cheese_glyph_t *glyph = cheese_font_get_glyph(font, glyph_id);
-    if (!glyph || glyph->width == 0 || glyph->height == 0) {
-      cursor_x += x_advance * s;
-      cursor_y += y_advance * s;
-      continue;
-    }
-
-    f32 w = glyph->width * s;
-    f32 h = glyph->height * s;
-    f32 off_x = (glyph->bearing_x + x_offset) * s;
-    f32 off_y = (glyph->bearing_y + y_offset) * s;
-
-    butter_draw_quad_textured(renderer, cursor_x + off_x, cursor_y - off_y, w,
-                              h, glyph->u0, glyph->v0, glyph->u1, glyph->v1,
-                              font->active_variant->atlas_texture_id, color,
-                              pipe);
-
-    cursor_x += x_advance * s;
-    cursor_y += y_advance * s;
-  }
-
-  hb_buffer_destroy(hb_buffer);
+  cheese_font_shape_run(font, text, x, y, scale, color, butter_emit_glyph,
+                        &emit);
 }
 
 static void butter_push_clip(void *userdata, f32 x, f32 y, f32 w, f32 h) {

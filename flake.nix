@@ -6,6 +6,7 @@
     flake-utils.url = "github:numtide/flake-utils";
     bread.url = "git+https://codeberg.org/h4rl/bread";
     butter.url = "git+https://codeberg.org/h4rl/butter";
+    # butter.url = "path:/home/h4rl/projects/butter";
     conjure.url = "git+https://codeberg.org/h4rl/conjure";
     htils.url = "github:h4rldev/htils";
   };

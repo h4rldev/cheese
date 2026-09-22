@@ -13,6 +13,7 @@
 #include <cheese/log.h>
 #include <cheese/patterns.h>
 #include <cheese/render.h>
+#include <cheese/style.h>
 #include <cheese/types.h>
 #include <cheese/widgets.h>
 

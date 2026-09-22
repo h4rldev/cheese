@@ -40,6 +40,12 @@ typedef struct {
   cheese_state_t *bar_scroll;
   cheese_texture_t image;
   cheese_toast_stack_t toasts;
+  cheese_state_t *text_wrap;
+  cheese_text_input_t text_wrap_state;
+  cheese_state_t *text_scroll;
+  cheese_state_t *password;
+  cheese_text_input_t password_state;
+  cheese_text_input_t readonly_state;
 } example_gallery_t;
 
 /***********************************/
@@ -106,6 +112,21 @@ static inline void gallery_init(example_gallery_t *g,
   g->text = cheese_state_str(store, "text", "Edit me!");
   g->text_state = (cheese_text_input_t){0};
   g->text_state.undo_arena = arena;
+  g->text_wrap = cheese_state_str(
+      store, "text_wrap",
+      "Cheese soft-wraps at the field edge. Type a long line and watch it "
+      "fold onto the next row; the caret stays in view and the field scrolls "
+      "when the text outgrows the box.");
+  g->text_wrap_state = (cheese_text_input_t){0};
+  g->text_wrap_state.undo_arena = arena;
+  g->text_scroll = cheese_state_f32(store, "text_scroll", 0.0f);
+  g->password_state = (cheese_text_input_t){0};
+  g->password_state.undo_arena = arena;
+  g->password_state.masked = true;
+  g->password = cheese_state_str(store, "password", "hunter2");
+  g->password_state.placeholder = "password";
+  g->readonly_state = (cheese_text_input_t){0};
+  g->readonly_state.readonly = true;
   g->choice = cheese_state_i32(store, "choice", 0);
   g->dropdown = cheese_state_i32(store, "dropdown", 0);
   g->dropdown_state = (cheese_popup_t){0};
@@ -165,13 +186,51 @@ static inline void gallery_draw(cheese_t *cheese, example_gallery_t *g) {
     cheese_slider_auto(cheese, null, (cheese_semantics_t){.name = "slider"},
                        cheese_val_state(g->slider));
 
-    cheese_progress_bar_auto(cheese, null, (cheese_semantics_t){0},
-                             cheese_val_state(g->progress));
+    {
+      cheese_style_t bar = cheese_style_new();
+      cheese_style_prop_set_f32(cheese, &bar, cheese->core_props.opacity,
+                                0.75f);
+      cheese_progress_set_fill_gradient(
+          cheese, &bar,
+          (cheese_gradient_t){.top_left = cheese_color_hex(0xFF66D9EF),
+                              .top_right = cheese_color_hex(0xFFA6E22E),
+                              .bottom_right = cheese_color_hex(0xFFF92672),
+                              .bottom_left = cheese_color_hex(0xFFFD971F)});
+      cheese_push_style(cheese, bar);
+      cheese_progress_bar_auto(cheese, null, (cheese_semantics_t){0},
+                               cheese_val_state(g->progress));
+      cheese_pop_style(cheese);
+    }
 
     cheese_text_input_auto(
         cheese, null, (cheese_semantics_t){.name = "text field"},
         cheese_val_state(g->text), &g->text_state, cheese_val_f32(0.0f),
         CHEESE_TEXT_INPUT_LINE, g->font);
+
+    {
+      f32 x, y, w = 0.0f, h = 0.0f;
+      cheese_layout_place(cheese, &w, &h, &x, &y);
+      f32 bar_w = 12.0f;
+      cheese_text_input_auto(
+          cheese, null, (cheese_semantics_t){.name = "wrapped field"},
+          cheese_val_state(g->text_wrap), &g->text_wrap_state,
+          cheese_val_state(g->text_scroll), CHEESE_TEXT_INPUT_WRAP, g->font);
+      cheese_scrollbar(cheese, null, (cheese_semantics_t){.name = "wrap bar"},
+                       x + w - bar_w, y, bar_w, h,
+                       cheese_val_state(g->text_scroll),
+                       g->text_wrap_state.viewport_h,
+                       g->text_wrap_state.content_h, CHEESE_SCROLLBAR_VERTICAL);
+    }
+
+    cheese_text_input_auto(
+        cheese, null, (cheese_semantics_t){.name = "password"},
+        cheese_val_state(g->password), &g->password_state, cheese_val_f32(0.0f),
+        CHEESE_TEXT_INPUT_LINE, g->font);
+
+    cheese_text_input_auto(
+        cheese, null, (cheese_semantics_t){.name = "read only"},
+        cheese_val_str("read only, selectable"), &g->readonly_state,
+        cheese_val_f32(0.0f), CHEESE_TEXT_INPUT_LINE, g->font);
 
     cheese_radio_auto(cheese, null, (cheese_semantics_t){.name = "choice nyan"},
                       cheese_val_state(g->choice), 0, cheese_val_str("Nyan"),

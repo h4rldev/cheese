@@ -101,6 +101,26 @@ f32 cheese_font_measure_text(const cheese_font_t *font, const string *label);
 //
 
 /**
+ * @brief Measure every cumulative prefix width of @c text in one shape pass.
+ * @details Shapes @c text once and writes, for each byte boundary @c i in
+ * `[0, len]`, the advance width of the first @c i bytes into @c out[i]. A
+ * caller that needs many prefix widths (line wrapping, caret mapping) shapes
+ * the run once instead of re-shaping each prefix. @c out must hold `text->len +
+ * 1` floats. The widths are measured over the whole run, so a substring
+ * `[start, end)` measures as `out[end] - out[start]`.
+ *
+ * @param font The font.
+ * @param text The text to shape.
+ * @param out Receives `text->len + 1` cumulative widths, in pixels.
+ */
+void cheese_font_prefix_widths(const cheese_font_t *font, const string *text,
+                               f32 *out);
+
+//
+//
+//
+
+/**
  * @brief Shape @c text and emit one quad per glyph.
  * @details Runs HarfBuzz once and calls @c emit for each glyph with its
  * destination quad and atlas coordinates, then advances by the glyph positions.

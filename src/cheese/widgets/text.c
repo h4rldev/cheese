@@ -14,8 +14,11 @@
 #include <cheese/core/layout.h>
 #include <cheese/core/semantics.h>
 #include <cheese/core/state.h>
-#include <cheese/core/style.h>
 #include <cheese/core/utf8.h>
+
+#include <cheese/style/prop.h>
+#include <cheese/style/resolve.h>
+#include <cheese/style/value.h>
 
 #include <cheese/render/draw.h>
 #include <cheese/render/font.h>
@@ -49,6 +52,9 @@ typedef struct {
   u32 anchor_b;
   u32 caret_line;
 
+  u32 first_line;
+  u32 last_line;
+
   f32 x, y;
   f32 pad_left, pad_top;
   f32 inner_w, inner_h;
@@ -59,6 +65,7 @@ typedef struct {
   b32 multiline;
   b32 wrap;
   b32 editing;
+  b32 follow_caret;
 
   cheese_color_t bg;
   cheese_color_t text_color;
@@ -78,6 +85,9 @@ typedef struct {
   u32 len;
 
   b32 wrap;
+
+  cheese_text_line_t *lines;
+  u32 line_count;
 
   f32 x, y;
   f32 pad_left, pad_top;
@@ -100,14 +110,14 @@ static void cheese_text_props(cheese_t *cheese) {
   if (text_prop_caret_color)
     return;
 
-  text_prop_caret_color =
-      cheese_prop_register(cheese, CHEESE_PROP_CARET_COLOR, CHEESE_PROP_COLOR);
-  text_prop_caret_width =
-      cheese_prop_register(cheese, CHEESE_PROP_CARET_WIDTH, CHEESE_PROP_F32);
-  text_prop_caret_style =
-      cheese_prop_register(cheese, CHEESE_PROP_CARET_STYLE, CHEESE_PROP_U32);
-  text_prop_caret_blink =
-      cheese_prop_register(cheese, CHEESE_PROP_CARET_BLINK, CHEESE_PROP_F32);
+  text_prop_caret_color = cheese_style_prop_register(
+      cheese, CHEESE_PROP_CARET_COLOR, CHEESE_PROP_COLOR);
+  text_prop_caret_width = cheese_style_prop_register(
+      cheese, CHEESE_PROP_CARET_WIDTH, CHEESE_PROP_F32);
+  text_prop_caret_style = cheese_style_prop_register(
+      cheese, CHEESE_PROP_CARET_STYLE, CHEESE_PROP_U32);
+  text_prop_caret_blink = cheese_style_prop_register(
+      cheese, CHEESE_PROP_CARET_BLINK, CHEESE_PROP_F32);
 }
 
 //
@@ -235,6 +245,32 @@ static b32 cheese_text_paste_text(cheese_t *cheese, cstr *buf, u32 cap,
 //
 //
 
+static u32 cheese_text_paste_room(cheese_t *cheese) {
+  if (!cheese->clipboard_get)
+    return 0;
+
+  b32 paste = false;
+  for (u32 i = 0; i < cheese->key_event_count && !paste; i++) {
+    const cheese_key_event_t *ev = &cheese->key_events[i];
+
+    if (!(ev->mods & CHEESE_MOD_CTRL))
+      continue;
+
+    if (ev->key == CHEESE_KEY_V || ev->codepoint == 'v' || ev->codepoint == 'V')
+      paste = true;
+  }
+
+  if (!paste)
+    return 0;
+
+  const cstr *text = cheese->clipboard_get(cheese->clipboard_userdata);
+  return text ? (u32)strlen(text) : 0;
+}
+
+//
+//
+//
+
 static void cheese_text_undo_push(cheese_text_input_t *state, const char *buf,
                                   u32 len, i32 caret, i32 anchor) {
   if (!state->undo_arena ||
@@ -354,10 +390,8 @@ static void cheese_text_mouse(cheese_text_mouse_t *mouse,
     extend = dx * dx + dy * dy > 25.0f;
   }
 
-  u32 line_count = 0;
-  cheese_text_line_t *lines =
-      cheese_text_lines(cheese, mouse->font, mouse->cur, mouse->len,
-                        mouse->wrap ? mouse->inner_w : 0.0f, &line_count);
+  u32 line_count = mouse->line_count;
+  cheese_text_line_t *lines = mouse->lines;
 
   if (line_count == 0 || !extend)
     return;
@@ -373,7 +407,7 @@ static void cheese_text_mouse(cheese_text_mouse_t *mouse,
     li = (i32)line_count - 1;
 
   u32 caret = cheese_text_caret_from_x(
-      mouse->font, mouse->cur, lines[li].start, lines[li].end,
+      mouse->cheese, mouse->font, mouse->cur, lines[li].start, lines[li].end,
       cheese->mouse_x - (mouse->x + mouse->pad_left) + state->scroll_x);
 
   state->caret = (i32)cheese_utf8_count(mouse->cur, caret);
@@ -431,17 +465,50 @@ static void cheese_text_fit_scroll(cheese_text_draw_t *draw) {
           content_h, draw->inner_h);
 
     f32 caret_top = (f32)draw->caret_line * draw->line_height;
-    if (caret_top < draw->scroll_y)
-      draw->scroll_y = caret_top;
+    if (draw->follow_caret) {
+      if (caret_top < draw->scroll_y)
+        draw->scroll_y = caret_top;
 
-    if (caret_top + draw->line_height > draw->scroll_y + draw->inner_h)
-      draw->scroll_y = caret_top + draw->line_height - draw->inner_h;
+      if (caret_top + draw->line_height > draw->scroll_y + draw->inner_h)
+        draw->scroll_y = caret_top + draw->line_height - draw->inner_h;
+    }
 
     draw->scroll_y = min(max_scroll, max(0.0f, draw->scroll_y));
 
     draw->state->content_h = content_h;
     draw->state->viewport_h = draw->inner_h;
   }
+}
+
+//
+//
+//
+
+/**
+ * @brief Clamps the draw's line range to the lines inside the viewport.
+ * @details Sets @c first_line / @c last_line so the glyph and selection loops
+ * skip lines scrolled out of view. Keeps a two-line margin past the bottom
+ * edge for a partially visible line and the one after it.
+ *
+ * @param draw The text draw state; its line range is updated in place.
+ *
+ * @pre @p draw has a valid @c line_count, @c line_height, @c scroll_y and @c
+ * inner_h.
+ */
+static void cheese_text_visible_lines(cheese_text_draw_t *draw) {
+  draw->first_line = 0;
+  draw->last_line = draw->line_count;
+
+  if (draw->line_height <= 0.0f)
+    return;
+
+  if (draw->scroll_y > 0.0f) {
+    u32 first = (u32)(draw->scroll_y / draw->line_height);
+    draw->first_line = min(first, draw->line_count);
+  }
+
+  u32 last = (u32)((draw->scroll_y + draw->inner_h) / draw->line_height) + 2;
+  draw->last_line = min(last, draw->line_count);
 }
 
 //
@@ -455,7 +522,7 @@ static void cheese_text_draw_selection(const cheese_text_draw_t *draw) {
   u32 s = min(draw->caret_b, draw->anchor_b);
   u32 e = max(draw->caret_b, draw->anchor_b);
 
-  for (u32 i = 0; i < draw->line_count; i++) {
+  for (u32 i = draw->first_line; i < draw->last_line; i++) {
     u32 rs = max(s, draw->lines[i].start);
     u32 re = min(e, draw->lines[i].end);
 
@@ -503,7 +570,7 @@ static void cheese_text_draw_placeholder(const cheese_text_draw_t *draw) {
 //
 
 static void cheese_text_draw_glyphs(const cheese_text_draw_t *draw) {
-  for (u32 i = 0; i < draw->line_count; i++) {
+  for (u32 i = draw->first_line; i < draw->last_line; i++) {
     if (draw->lines[i].end <= draw->lines[i].start)
       continue;
 
@@ -538,15 +605,15 @@ static void cheese_text_draw_caret(const cheese_text_draw_t *draw) {
 
   cheese_text_props(draw->cheese);
 
-  cheese_color_t caret_color = cheese_style_get_prop_color(
+  cheese_color_t caret_color = cheese_style_prop_get_color(
       draw->style, text_prop_caret_color, draw->text_color);
 
   f32 caret_w =
-      cheese_style_get_prop_f32(draw->style, text_prop_caret_width, 1.5f);
-  u32 caret_shape = cheese_style_get_prop_u32(
+      cheese_style_prop_get_f32(draw->style, text_prop_caret_width, 1.5f);
+  u32 caret_shape = cheese_style_prop_get_u32(
       draw->style, text_prop_caret_style, CHEESE_TEXT_CARET_BAR);
   f32 blink =
-      cheese_style_get_prop_f32(draw->style, text_prop_caret_blink, 0.0f);
+      cheese_style_prop_get_f32(draw->style, text_prop_caret_blink, 0.0f);
 
   b32 caret_on = true;
   if (blink > 0.0f) {
@@ -656,7 +723,7 @@ b32 cheese_text_edit_paste(cheese_t *cheese, cheese_text_input_t *state,
 
 b32 cheese_text_edit(cheese_t *cheese, cheese_text_input_t *state, cstr *buf,
                      u32 cap, u32 *len, b32 multiline, cheese_font_t *font,
-                     f32 wrap_w) {
+                     f32 wrap_w, u32 page_lines) {
   if (!cheese || !state || !buf || !len)
     return false;
 
@@ -694,7 +761,8 @@ b32 cheese_text_edit(cheese_t *cheese, cheese_text_input_t *state, cstr *buf,
     }
     if (ev->key == CHEESE_KEY_HOME || ev->key == CHEESE_KEY_END ||
         (multiline &&
-         (ev->key == CHEESE_KEY_UP || ev->key == CHEESE_KEY_DOWN))) {
+         (ev->key == CHEESE_KEY_UP || ev->key == CHEESE_KEY_DOWN ||
+          ev->key == CHEESE_KEY_PAGE_UP || ev->key == CHEESE_KEY_PAGE_DOWN))) {
       u32 line_count = 0;
       cheese_text_line_t *lines =
           cheese_text_lines(cheese, font, buf, blen, wrap_w, &line_count);
@@ -711,6 +779,16 @@ b32 cheese_text_edit(cheese_t *cheese, cheese_text_input_t *state, cstr *buf,
             cheese_utf8_offset(buf + lines[li - 1].start,
                                lines[li - 1].end - lines[li - 1].start, col);
         caret_b = lines[li - 1].start + off;
+      } else if (ev->key == CHEESE_KEY_PAGE_UP ||
+                 ev->key == CHEESE_KEY_PAGE_DOWN) {
+        u32 page = page_lines ? page_lines : 1;
+        u32 target = ev->key == CHEESE_KEY_PAGE_UP
+                         ? (li > page ? li - page : 0)
+                         : min(line_count - 1, li + page);
+        u32 off =
+            cheese_utf8_offset(buf + lines[target].start,
+                               lines[target].end - lines[target].start, col);
+        caret_b = lines[target].start + off;
       } else if (ev->key == CHEESE_KEY_DOWN && li + 1 < line_count) {
         u32 off =
             cheese_utf8_offset(buf + lines[li + 1].start,
@@ -910,6 +988,10 @@ b32 cheese_text_input(cheese_t *cheese, const cstr *classes,
     line_height = font->active_variant->line_height;
   }
 
+  u32 page_lines = line_height > 0.0f ? (u32)(inner_h / line_height) : 1;
+  if (page_lines < 1)
+    page_lines = 1;
+
   if (focused)
     cheese_draw_focus_ring(cheese, &style, x, y, w, h);
 
@@ -920,6 +1002,12 @@ b32 cheese_text_input(cheese_t *cheese, const cstr *classes,
   if (multiline && hovered && scroll.state && cheese->scroll_y != 0.0f)
     scroll_y -= cheese->scroll_y * line_height * 3.0f;
 
+  u32 line_count = 0;
+  cheese_text_line_t *lines = null;
+  if (font)
+    lines = cheese_text_lines(cheese, font, cur, len, wrap ? inner_w : 0.0f,
+                              &line_count);
+
   if (state) {
     cheese_text_mouse_t mouse = {
         .cheese = cheese,
@@ -928,6 +1016,8 @@ b32 cheese_text_input(cheese_t *cheese, const cstr *classes,
         .cur = cur,
         .len = len,
         .wrap = wrap,
+        .lines = lines,
+        .line_count = line_count,
         .x = x,
         .y = y,
         .pad_left = pad_left,
@@ -954,15 +1044,20 @@ b32 cheese_text_input(cheese_t *cheese, const cstr *classes,
 
   b32 changed = false;
   if (editing && state && !activated) {
-    u32 cap = len + CHEESE_MAX_KEY_EVENTS * 4 + 1;
+    u32 head = CHEESE_MAX_KEY_EVENTS * 4;
+    u32 paste_room = cheese_text_paste_room(cheese);
+    if (paste_room > head)
+      head = paste_room;
+
+    u32 cap = len + head + 1;
     for (u32 i = 0; i < state->undo_count; i++)
-      cap = max(cap, state->undo[i].len + CHEESE_MAX_KEY_EVENTS * 4 + 1);
+      cap = max(cap, state->undo[i].len + head + 1);
     char *buf = arena_alloc(cheese->frame_arena, char, cap);
     memcpy(buf, cur, len);
 
     u32 blen = len;
     changed = cheese_text_edit(cheese, state, buf, cap, &blen, multiline, font,
-                               wrap ? inner_w : 0.0f);
+                               wrap ? inner_w : 0.0f, page_lines);
     if (changed) {
       cheese_value_set_str(text, buf);
       cur = buf;
@@ -970,12 +1065,21 @@ b32 cheese_text_input(cheese_t *cheese, const cstr *classes,
     }
   }
 
+  if (multiline && editing && state) {
+    if (cheese_key_pressed(cheese, CHEESE_KEY_PAGE_DOWN))
+      scroll_y += (f32)page_lines * line_height;
+    else if (cheese_key_pressed(cheese, CHEESE_KEY_PAGE_UP))
+      scroll_y -= (f32)page_lines * line_height;
+  }
+
+  b32 follow = state && state->caret != state->last_caret;
+
   cheese_color_t bg = style.bg_color ? style.bg_color : 0xFFFFFFFF;
   cheese_color_t text_color = style.text_color ? style.text_color : 0x000000FF;
   cheese_color_t sel_color = style.focus_color ? style.focus_color : 0x3B82F680;
 
   f32 alpha =
-      cheese_style_get_prop_f32(&style, cheese->core_props.opacity, 1.0f);
+      cheese_style_prop_get_f32(&style, cheese->core_props.opacity, 1.0f);
   cheese_draw_bg(cheese, &style, x, y, w, h, bg, 0, alpha);
   cheese_draw_border(cheese, &style, x, y, w, h);
 
@@ -985,9 +1089,9 @@ b32 cheese_text_input(cheese_t *cheese, const cstr *classes,
   f32 scroll_x = state ? state->scroll_x : 0.0f;
 
   if (font) {
-    u32 line_count = 0;
-    cheese_text_line_t *lines = cheese_text_lines(
-        cheese, font, cur, len, wrap ? inner_w : 0.0f, &line_count);
+    if (changed)
+      lines = cheese_text_lines(cheese, font, cur, len, wrap ? inner_w : 0.0f,
+                                &line_count);
 
     u32 caret_b = 0;
     u32 anchor_b = 0;
@@ -1021,6 +1125,7 @@ b32 cheese_text_input(cheese_t *cheese, const cstr *classes,
         .multiline = multiline,
         .wrap = wrap,
         .editing = editing,
+        .follow_caret = follow,
         .bg = bg,
         .text_color = text_color,
         .sel_color = sel_color,
@@ -1029,6 +1134,7 @@ b32 cheese_text_input(cheese_t *cheese, const cstr *classes,
     cheese_text_fit_scroll(&draw);
     scroll_x = draw.scroll_x;
     scroll_y = draw.scroll_y;
+    cheese_text_visible_lines(&draw);
 
     b32 clip = cheese->renderer->push_clip != null;
     if (clip)
@@ -1042,6 +1148,9 @@ b32 cheese_text_input(cheese_t *cheese, const cstr *classes,
     if (clip)
       cheese_pop_clip(cheese);
   }
+
+  if (state)
+    state->last_caret = state->caret;
 
   if (multiline && scroll_y != scroll_in)
     cheese_value_set_f32(scroll, scroll_y);

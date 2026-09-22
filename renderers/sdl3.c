@@ -54,6 +54,23 @@ static SDL_FColor sdl3_color(cheese_color_t color) {
   };
 }
 
+static SDL_FColor sdl3_gradient_at(f32 px, f32 py, f32 x, f32 y, f32 w, f32 h,
+                                   cheese_gradient_t g) {
+  f32 u = w > 0.0f ? (px - x) / w : 0.0f;
+  f32 v = h > 0.0f ? (py - y) / h : 0.0f;
+  SDL_FColor tl = sdl3_color(g.top_left);
+  SDL_FColor tr = sdl3_color(g.top_right);
+  SDL_FColor br = sdl3_color(g.bottom_right);
+  SDL_FColor bl = sdl3_color(g.bottom_left);
+  f32 ux = 1.0f - u, vy = 1.0f - v;
+  return (SDL_FColor){
+      .r = tl.r * ux * vy + tr.r * u * vy + bl.r * ux * v + br.r * u * v,
+      .g = tl.g * ux * vy + tr.g * u * vy + bl.g * ux * v + br.g * u * v,
+      .b = tl.b * ux * vy + tr.b * u * vy + bl.b * ux * v + br.b * u * v,
+      .a = tl.a * ux * vy + tr.a * u * vy + bl.a * ux * v + br.a * u * v,
+  };
+}
+
 static sdl3_texture_t *sdl3_find_texture(sdl3_renderer_t *renderer,
                                          u32 texture_id) {
   for (u32 i = 0; i < renderer->texture_count; i++)
@@ -87,17 +104,17 @@ static void vert_flush(sdl3_renderer_t *renderer, SDL_Texture *texture) {
   renderer->vert_count = 0;
 }
 
-static void tri(sdl3_renderer_t *renderer, SDL_FColor color, f32 x0, f32 y0,
-                f32 x1, f32 y1, f32 x2, f32 y2) {
-  vert_push(renderer, x0, y0, 0, 0, color);
-  vert_push(renderer, x1, y1, 0, 0, color);
-  vert_push(renderer, x2, y2, 0, 0, color);
+static void tri(sdl3_renderer_t *renderer, SDL_FColor c0, f32 x0, f32 y0,
+                SDL_FColor c1, f32 x1, f32 y1, SDL_FColor c2, f32 x2, f32 y2) {
+  vert_push(renderer, x0, y0, 0, 0, c0);
+  vert_push(renderer, x1, y1, 0, 0, c1);
+  vert_push(renderer, x2, y2, 0, 0, c2);
 }
 
 static void quad(sdl3_renderer_t *renderer, SDL_FColor color, f32 x0, f32 y0,
                  f32 x1, f32 y1, f32 x2, f32 y2, f32 x3, f32 y3) {
-  tri(renderer, color, x0, y0, x1, y1, x2, y2);
-  tri(renderer, color, x0, y0, x2, y2, x3, y3);
+  tri(renderer, color, x0, y0, color, x1, y1, color, x2, y2);
+  tri(renderer, color, x0, y0, color, x2, y2, color, x3, y3);
 }
 
 // Scales per-corner radii so no two adjacent radii overlap a side.
@@ -125,19 +142,23 @@ static cheese_corners_t sdl3_scale_radii(cheese_corners_t radius, f32 w,
 //
 //
 
-static void sdl3_draw_rect(void *userdata, cheese_corners_t radius, f32 x,
-                           f32 y, f32 w, f32 h, cheese_color_t color) {
+static void sdl3_draw_rect_gradient(void *userdata, cheese_corners_t radius,
+                                    f32 x, f32 y, f32 w, f32 h,
+                                    cheese_gradient_t colors) {
   sdl3_renderer_t *renderer = (sdl3_renderer_t *)userdata;
   if (w <= 0.0f || h <= 0.0f)
     return;
 
-  SDL_FColor c = sdl3_color(color);
   cheese_corners_t r = sdl3_scale_radii(radius, w, h);
-
   f32 tl = r.top_left, tr = r.top_right, br = r.bottom_right,
       bl = r.bottom_left;
   if (tl <= 0 && tr <= 0 && br <= 0 && bl <= 0) {
-    quad(renderer, c, x, y, x + w, y, x + w, y + h, x, y + h);
+    SDL_FColor c_tl = sdl3_color(colors.top_left);
+    SDL_FColor c_tr = sdl3_color(colors.top_right);
+    SDL_FColor c_br = sdl3_color(colors.bottom_right);
+    SDL_FColor c_bl = sdl3_color(colors.bottom_left);
+    tri(renderer, c_tl, x, y, c_tr, x + w, y, c_br, x + w, y + h);
+    tri(renderer, c_tl, x, y, c_br, x + w, y + h, c_bl, x, y + h);
     vert_flush(renderer, null);
     return;
   }
@@ -169,12 +190,25 @@ static void sdl3_draw_rect(void *userdata, cheese_corners_t radius, f32 x,
 
   f32 cx = x + w * 0.5f;
   f32 cy = y + h * 0.5f;
+  SDL_FColor c_centre = sdl3_gradient_at(cx, cy, x, y, w, h, colors);
   for (u32 i = 0; i < n; i++) {
     SDL_FPoint a = pts[i];
     SDL_FPoint b = pts[(i + 1) % n];
-    tri(renderer, c, cx, cy, a.x, a.y, b.x, b.y);
+    tri(renderer, c_centre, cx, cy,
+        sdl3_gradient_at(a.x, a.y, x, y, w, h, colors), a.x, a.y,
+        sdl3_gradient_at(b.x, b.y, x, y, w, h, colors), b.x, b.y);
   }
   vert_flush(renderer, null);
+}
+
+//
+//
+//
+
+static void sdl3_draw_rect(void *userdata, cheese_corners_t radius, f32 x,
+                           f32 y, f32 w, f32 h, cheese_color_t color) {
+  sdl3_draw_rect_gradient(userdata, radius, x, y, w, h,
+                          (cheese_gradient_t){color, color, color, color});
 }
 
 //
@@ -343,8 +377,9 @@ static void sdl3_draw_arc(void *userdata, f32 cx, f32 cy, f32 radius,
     for (u32 i = 0; i < segments; i++) {
       f32 t0 = start_angle + (f32)i / (f32)segments * range;
       f32 t1 = start_angle + (f32)(i + 1) / (f32)segments * range;
-      tri(renderer, c, cx, cy, cx + radius * cosf(t0), cy + radius * sinf(t0),
-          cx + radius * cosf(t1), cy + radius * sinf(t1));
+      tri(renderer, c, cx, cy, c, cx + radius * cosf(t0),
+          cy + radius * sinf(t0), c, cx + radius * cosf(t1),
+          cy + radius * sinf(t1));
     }
     vert_flush(renderer, null);
     return;
@@ -542,6 +577,7 @@ cheese_renderer_t cheese_create_sdl3_renderer(SDL_Renderer *renderer,
   result.sdf_text = false;
 
   result.draw_rect = sdl3_draw_rect;
+  result.draw_rect_gradient = sdl3_draw_rect_gradient;
   result.draw_border = sdl3_draw_border;
   result.draw_texture = sdl3_draw_texture;
   result.draw_line = sdl3_draw_line;

@@ -50,11 +50,13 @@ void cheese_debug_overlay(cheese_t *cheese, cheese_font_t *font) {
 }
 
 void cheese_debug_monitor(cheese_t *cheese, cheese_font_t *font, f32 x, f32 y,
+                          f32 box_w, f32 box_h, cheese_alignment_t align_x,
+                          cheese_alignment_t align_y, f32 margin,
                           const cheese_debug_metrics_t *metrics) {
   if (!cheese || !font || !metrics)
     return;
 
-  char row_buf[7][48];
+  char row_buf[8][48];
   snprintf(row_buf[0], sizeof(row_buf[0]), "CPU               %.1f %%",
            metrics->cpu_pct);
   snprintf(row_buf[1], sizeof(row_buf[1]), "GPU               %.1f %%",
@@ -65,13 +67,16 @@ void cheese_debug_monitor(cheese_t *cheese, cheese_font_t *font, f32 x, f32 y,
            metrics->frame_ms);
   snprintf(row_buf[4], sizeof(row_buf[4]), "GPU heap (global) %.1f / %.1f MiB",
            metrics->vram_used_mib, metrics->vram_total_mib);
-  snprintf(row_buf[5], sizeof(row_buf[5]), "RSS               %.1f MiB",
+  snprintf(row_buf[5], sizeof(row_buf[5]), "GPU budget        %.1f MiB%s",
+           metrics->vram_budget_mib,
+           metrics->memory_budget_valid ? "" : " (n/a)");
+  snprintf(row_buf[6], sizeof(row_buf[5]), "RSS               %.1f MiB",
            metrics->rss_mib);
-  snprintf(row_buf[6], sizeof(row_buf[6]), "PSS               %.1f MiB",
+  snprintf(row_buf[7], sizeof(row_buf[6]), "PSS               %.1f MiB",
            metrics->pss_mib);
 
-  const u32 count = 7;
-  string *rows[7];
+  const u32 count = 8;
+  string *rows[8];
 
   f32 s = font->scale > 0.0f ? font->scale : 1.0f;
   f32 asc = (f32)font->base_ascender * s;
@@ -93,13 +98,38 @@ void cheese_debug_monitor(cheese_t *cheese, cheese_font_t *font, f32 x, f32 y,
   f32 pad = 8.0f;
   f32 w = max_w + pad * 2.0f;
   f32 h = asc - desc + (f32)(count - 1) * line_h + pad * 2.0f;
-  f32 baseline = y + pad + asc;
 
-  cheese_draw_rect(cheese, (cheese_corners_t){4.0f, 4.0f, 4.0f, 4.0f}, x, y, w,
-                   h, cheese_color_rgba(0, 0, 0, 51));
+  f32 px = x, py = y;
+  switch (align_x) {
+  case CHEESE_ALIGN_CENTER:
+    px = x + (box_w - w) * 0.5f;
+    break;
+  case CHEESE_ALIGN_END:
+    px = x + box_w - w - margin;
+    break;
+  default:
+    px = x + margin;
+    break;
+  }
+  switch (align_y) {
+  case CHEESE_ALIGN_CENTER:
+    py = y + (box_h - h) * 0.5f;
+    break;
+  case CHEESE_ALIGN_END:
+    py = y + box_h - h - margin;
+    break;
+  default:
+    py = y + margin;
+    break;
+  }
+
+  f32 baseline = py + pad + asc;
+
+  cheese_draw_rect(cheese, (cheese_corners_t){4.0f, 4.0f, 4.0f, 4.0f}, px, py,
+                   w, h, cheese_color_rgba(0, 0, 0, 51));
 
   cheese_color_t text_color = cheese_color_rgba(230, 230, 230, 255);
   for (u32 i = 0; i < count; i++)
-    cheese_draw_text(cheese, x + pad, baseline + (f32)i * line_h, rows[i], font,
-                     text_color, 1.0f);
+    cheese_draw_text(cheese, px + pad, baseline + (f32)i * line_h, rows[i],
+                     font, text_color, 1.0f);
 }

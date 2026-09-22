@@ -9,8 +9,10 @@
 
 #include <cheese/core/init.h>
 #include <cheese/core/semantics.h>
-#include <cheese/core/style.h>
-#include <cheese/core/theme.h>
+
+#include <cheese/style/resolve.h>
+#include <cheese/style/theme.h>
+#include <cheese/style/value.h>
 
 #include <cheese/widgets/button.h>
 

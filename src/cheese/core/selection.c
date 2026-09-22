@@ -9,8 +9,9 @@
 #include <cheese/types.h>
 
 #include <cheese/core/selection.h>
-#include <cheese/core/style.h>
 #include <cheese/core/utf8.h>
+
+#include <cheese/style/value.h>
 
 #include <cheese/render/draw.h>
 #include <cheese/render/font.h>
@@ -128,9 +129,9 @@ void cheese_selection_update(cheese_t *cheese) {
     }
 
     if (hit) {
-      u32 at =
-          cheese_text_caret_from_x(hit->font, (const cstr *)hit->text->base, 0,
-                                   hit->text->len, cheese->mouse_x - hit->x);
+      u32 at = cheese_text_caret_from_x(
+          cheese, hit->font, (const cstr *)hit->text->base, 0, hit->text->len,
+          cheese->mouse_x - hit->x);
 
       cheese->selection.active = true;
       cheese->selection.run = hit_index;
@@ -145,9 +146,9 @@ void cheese_selection_update(cheese_t *cheese) {
   } else if (dragging && cheese->selection.run < cheese->text_run_count) {
     const cheese_text_run_t *run = &cheese->text_runs[cheese->selection.run];
     if (run->hash == cheese->selection.hash)
-      cheese->selection.focus =
-          cheese_text_caret_from_x(run->font, (const cstr *)run->text->base, 0,
-                                   run->text->len, cheese->mouse_x - run->x);
+      cheese->selection.focus = cheese_text_caret_from_x(
+          cheese, run->font, (const cstr *)run->text->base, 0, run->text->len,
+          cheese->mouse_x - run->x);
   }
 
   if (cheese->selection.active && cheese->edit_id == 0 &&

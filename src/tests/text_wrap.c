@@ -13,7 +13,10 @@
 #include <cheese/core/init.h>
 #include <cheese/core/semantics.h>
 #include <cheese/core/state.h>
-#include <cheese/core/style.h>
+
+#include <cheese/style/prop.h>
+#include <cheese/style/resolve.h>
+#include <cheese/style/value.h>
 
 #include <cheese/render/font.h>
 
@@ -282,10 +285,10 @@ int main(void) {
          "a drag across lines selects the newline too");
 
   cheese_clear_frame_needed(&cheese);
-  u32 blink_prop =
-      cheese_prop_register(&cheese, CHEESE_PROP_CARET_BLINK, CHEESE_PROP_F32);
+  u32 blink_prop = cheese_style_prop_register(&cheese, CHEESE_PROP_CARET_BLINK,
+                                              CHEESE_PROP_F32);
   cheese_style_t caret_style = cheese_style_new();
-  cheese_style_set_prop_f32(&cheese, &caret_style, blink_prop, 1.0f);
+  cheese_style_prop_set_f32(&cheese, &caret_style, blink_prop, 1.0f);
 
   cheese_state_t *ctext = cheese_state_str(cheese.store, "ct", "hi");
   cheese_text_input_t cstate = {0};

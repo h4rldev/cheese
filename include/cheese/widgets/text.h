@@ -43,12 +43,13 @@
  * @param multiline Whether Enter/Up/Down edit across lines.
  * @param font The font to render with.
  * @param wrap_w The width at which to wrap.
+ * @param page_lines Lines a PageUp/PageDown jumps; 0 is treated as 1.
  *
  * @return true if the buffer changed.
  */
 b32 cheese_text_edit(cheese_t *cheese, cheese_text_input_t *state, cstr *buf,
                      u32 cap, u32 *len, b32 multiline, cheese_font_t *font,
-                     f32 wrap_w);
+                     f32 wrap_w, u32 page_lines);
 
 //
 //

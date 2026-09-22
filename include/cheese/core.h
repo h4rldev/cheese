@@ -16,8 +16,6 @@
 #include <cheese/core/selection.h>
 #include <cheese/core/semantics.h>
 #include <cheese/core/state.h>
-#include <cheese/core/style.h>
-#include <cheese/core/theme.h>
 #include <cheese/core/utf8.h>
 
 /***********************************/
